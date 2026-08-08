@@ -130,6 +130,23 @@ Reproduce any of it with `tools/send_key.py`. Note `--delay` / `--repeat`: the
 controller and the TV are usually in different rooms, and a single fire-and-check
 keypress is not a confirmation — repeat over a window you can walk to.
 
+## Resilience model
+
+The device drops TCP whenever it sleeps, so disconnection is routine, not a fault.
+
+- **Reconnect backs off** 5 → 10 → 20 → 40 → 60s and stays at 60. The counter resets
+  only on a *completed handshake*, not on TCP connect — the handshake is the first
+  real proof the connection works.
+- **A liveness watchdog** catches half-open sockets, which Director does not report.
+  The device pings on its own schedule, so silence is the signal: 90 seconds with
+  nothing inbound forces a reconnect regardless of what the socket claims.
+- **Wake-on-LAN** is the only route to a device too asleep for TCP. The MAC is learned
+  via `GetDeviceMAC` while connected (the ARP entry exists then) and persisted,
+  because once the device sleeps the ARP entry may be gone. Needs Network Standby on
+  the device, and does not work over Wi-Fi — both are WOL limitations.
+- **Retrying stops** when there is no IP or no stored identity. Nothing to connect to
+  is a configuration state, not a transient failure.
+
 ## State feedback — measured behaviour
 
 Verified against the target device on 2026-08-08 via `tools/send_key.py`.

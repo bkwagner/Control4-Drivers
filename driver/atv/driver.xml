@@ -63,6 +63,13 @@
 				<description>Whether the device reports itself as on. This is the streamer's own state, not the TV's.</description>
 			</property>
 			<property>
+				<name>Device MAC</name>
+				<default></default>
+				<type>STRING</type>
+				<readonly>false</readonly>
+				<description>Used for Wake-on-LAN. Learned automatically on the first successful connection - only set this by hand if that fails. Wake-on-LAN needs Network Standby enabled on the device and does not work over Wi-Fi.</description>
+			</property>
+			<property>
 				<name>Debug Mode</name>
 				<type>LIST</type>
 				<items>
@@ -93,6 +100,18 @@
 				<command>UNPAIR</command>
 			</action>
 			<action>
+				<name>Power On (wake)</name>
+				<command>POWER_ON</command>
+			</action>
+			<action>
+				<name>Power Off (sleep)</name>
+				<command>POWER_OFF</command>
+			</action>
+			<action>
+				<name>Send Wake-on-LAN</name>
+				<command>WAKE</command>
+			</action>
+			<action>
 				<name>Print Diagnostics</name>
 				<command>DIAGNOSTICS</command>
 			</action>
@@ -108,6 +127,14 @@
 						<default></default>
 					</param>
 				</params>
+			</command>
+			<command>
+				<name>Power On</name>
+				<description>Wake the device: Wake-on-LAN plus a wake key if connected</description>
+			</command>
+			<command>
+				<name>Power Off</name>
+				<description>Put the device to sleep. Does not touch TV power, which Control4 controls over CEC</description>
 			</command>
 			<command>
 				<name>Send Key</name>

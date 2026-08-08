@@ -90,6 +90,45 @@ function C4:NetPortOptions(...)          record('NetPortOptions', ...) end
 function C4:NetConnect(...)              record('NetConnect', ...) end
 function C4:NetDisconnect(...)           record('NetDisconnect', ...) end
 function C4:AddTimer(...)                record('AddTimer', ...) return 1 end
+Timers = {}
+function C4:SetTimer(ms, callback, repeating)
+    local t = { ms = ms, callback = callback, repeating = repeating, cancelled = false }
+    t.Cancel = function(self) self.cancelled = true end
+    table.insert(Timers, t)
+    return t
+end
+function C4:SendWOL(mac, port) record('SendWOL', mac, port) end
+function C4:GetDeviceMAC(binding) return StubMAC end
+StubMAC = '38:18:4C:70:F5:3F'
+
+-- Fire the most recently scheduled live timer n times.
+function FireTimer(n)
+    for _ = 1, (n or 1) do
+        local t = nil
+        for i = #Timers, 1, -1 do
+            if (not Timers[i].cancelled) then t = Timers[i] break end
+        end
+        if (t == nil) then return false end
+        t.callback(t)
+    end
+    return true
+end
+function TimerCount()
+    local n = 0
+    for _, t in ipairs(Timers) do if (not t.cancelled) then n = n + 1 end end
+    return n
+end
+function LastTimerMs()
+    for i = #Timers, 1, -1 do
+        if (not Timers[i].cancelled) then return Timers[i].ms end
+    end
+end
+function ClearTimers() Timers = {} end
+function CallCount(name)
+    local n = 0
+    for _, c in ipairs(Calls) do if (c.name == name) then n = n + 1 end end
+    return n
+end
 function C4:KillTimer(...)               record('KillTimer', ...) return nil end
 function C4:ErrorLog(...)                record('ErrorLog', ...) end
 function C4:GetDeviceID() return 99 end
@@ -220,6 +259,106 @@ def print_miniapp_tests(lua, g) -> None:
         check("PASSTHROUGH UP reaches the device", msg.remote_key_inject.key_code, 19)
 
 
+def print_resilience_tests() -> None:
+    """Reconnect backoff, liveness watchdog, and Wake-on-LAN.
+
+    These are the behaviours that only show up on hardware after a sleep cycle or
+    a network drop, and are correspondingly miserable to test there.
+    """
+    print()
+    print("resilience")
+
+    lua = load_driver()
+    g = lua.globals()
+    g.SetPaired(b"-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n",
+                b"-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n")
+    g.OnDriverInit()
+    g.OnDriverLateInit()
+
+    # Successive failures must back off rather than hammer a sleeping device.
+    delays = []
+    for _ in range(7):
+        g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"OFFLINE")
+        delays.append(g.LastTimerMs() / 1000)
+        g.FireTimer(1)          # fire the retry, which attempts to connect again
+    check("backoff escalates then caps", delays, [5, 10, 20, 40, 60, 60, 60])
+
+    # A completed handshake proves the connection works, so the backoff resets.
+    g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"ONLINE")
+    m = RemoteMessage()
+    m.remote_configure.code1 = 622
+    g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
+    m = RemoteMessage()
+    m.remote_set_active.active = 622
+    g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
+    check("handshake resets the backoff", g.Driver.reconnectAttempt, 0)
+    check("MAC learned from the connection",
+          g.Prop(b"Device MAC"), b"38:18:4C:70:F5:3F")
+
+    g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"OFFLINE")
+    check("next failure starts from the shortest delay", g.LastTimerMs() / 1000, 5)
+
+    # Watchdog: a half-open socket delivers nothing and Director never reports it.
+    lua = load_driver()
+    g = lua.globals()
+    g.SetPaired(b"cert", b"key")
+    g.OnDriverInit()
+    g.OnDriverLateInit()
+    g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"ONLINE")
+    m = RemoteMessage()
+    m.remote_set_active.active = 622
+    g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
+    check("connected after handshake", g.Driver.connected, True)
+
+    g.FireTimer(2)                       # two quiet ticks: not yet fatal
+    check("survives 2 quiet ticks", g.Driver.connected, True)
+    g.FireTimer(1)                       # third tick crosses the limit
+    check("watchdog drops a silent connection", g.Driver.connected, False)
+    check("watchdog schedules a reconnect", g.CallCount(b"NetDisconnect") > 0, True)
+
+    # Traffic resets the counter, so a busy connection is never dropped.
+    lua = load_driver()
+    g = lua.globals()
+    g.SetPaired(b"cert", b"key")
+    g.OnDriverInit()
+    g.OnDriverLateInit()
+    g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"ONLINE")
+    m = RemoteMessage()
+    m.remote_set_active.active = 622
+    g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
+    ping = RemoteMessage()
+    ping.remote_ping_request.val1 = 1
+    for _ in range(6):
+        g.FireTimer(2)                   # two quiet ticks
+        g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(ping))
+    check("traffic keeps the connection alive", g.Driver.connected, True)
+
+    # Wake-on-LAN.
+    lua = load_driver()
+    g = lua.globals()
+    g.SetPaired(b"cert", b"key")
+    g.OnDriverInit()
+    g.OnDriverLateInit()
+    g.WakeDevice()
+    check("no WOL before a MAC is known", g.CallCount(b"SendWOL"), 0)
+
+    g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"ONLINE")
+    m = RemoteMessage()
+    m.remote_set_active.active = 622
+    g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
+    g.WakeDevice()
+    check("WOL sent once the MAC is learned", g.CallCount(b"SendWOL"), 1)
+
+    # Nothing to connect to: retrying forever would be pointless.
+    lua = load_driver()
+    g = lua.globals()
+    g.OnDriverInit()
+    g.OnDriverLateInit()
+    g.Properties[b"Device IP"] = b""
+    g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"OFFLINE")
+    check("no retry scheduled without an IP", g.TimerCount(), 0)
+
+
 def main() -> None:
     lua = load_driver()
     g = lua.globals()
@@ -339,6 +478,7 @@ def main() -> None:
 
     print("\npairing exchange")
     print_miniapp_tests(lua, g)
+    print_resilience_tests()
 
     lua2 = load_driver()
     h = lua2.globals()

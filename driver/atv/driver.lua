@@ -71,9 +71,28 @@ local KEY_FILE  = 'atv_client_key.pem'
 local PERSIST_CERT = 'client_cert_pem'
 local PERSIST_KEY  = 'client_key_pem'
 
--- Retry backoff for the control connection, in seconds. The device drops TCP
--- when it sleeps, so disconnection is normal rather than exceptional.
-local RECONNECT_DELAY = 15
+--[[
+	Reconnect backoff, in seconds. The device drops TCP whenever it sleeps, so
+	disconnection is routine rather than exceptional - but retrying every few
+	seconds forever against a sleeping device wastes effort and floods the log.
+	Back off to a minute and stay there; the last value repeats indefinitely.
+]]
+local RECONNECT_DELAYS = { 5, 10, 20, 40, 60 }
+
+--[[
+	Liveness watchdog.
+
+	A dropped connection is usually reported by Director, but a half-open TCP
+	socket is not: the device can vanish (sleep, Wi-Fi drop, reboot) leaving a
+	socket that looks fine and never delivers anything again. The device pings us
+	on its own schedule, so silence is the signal. Three quiet ticks - 90 seconds
+	with nothing at all inbound - means the connection is dead regardless of what
+	the socket claims.
+]]
+local WATCHDOG_INTERVAL = 30
+local WATCHDOG_LIMIT    = 3
+
+local PERSIST_MAC = 'device_mac'
 
 --------------------------------------------------------------------------------
 -- State
@@ -89,8 +108,13 @@ Driver = {
 	connected    = false,
 	configured   = false,   -- server has sent RemoteConfigure and we replied
 	features     = nil,     -- negotiated feature mask
-	reconnectTimer = nil,
 	pairStage    = nil,     -- nil | 'peek' | 'exchange' | 'awaiting_code'
+
+	reconnectTimer  = nil,
+	reconnectAttempt = 0,   -- index into RECONNECT_DELAYS
+	watchdogTimer   = nil,
+	silentTicks     = 0,    -- watchdog ticks with no inbound traffic
+	mac             = nil,  -- learned from the connection, used for Wake-on-LAN
 }
 
 --------------------------------------------------------------------------------
@@ -160,6 +184,13 @@ local function loadIdentity()
 		and Driver.keyPem ~= nil and Driver.keyPem ~= '')
 
 	C4:UpdateProperty('Paired Identity', have and fingerprint(Driver.certPem) or 'none')
+
+	Driver.mac = C4:PersistGetValue(PERSIST_MAC)
+	if (Driver.mac ~= nil and Driver.mac ~= '' and
+		(Properties['Device MAC'] == nil or Properties['Device MAC'] == '')) then
+		C4:UpdateProperty('Device MAC', Driver.mac)
+	end
+
 	return have
 end
 
@@ -247,22 +278,111 @@ function Connect()
 	setStatus('Connecting to %s:%d', ip, PORT_CONTROL)
 end
 
+local function cancelTimer(timer)
+	if (timer ~= nil) then pcall(function() timer:Cancel() end) end
+	return nil
+end
+
+--[[
+	Stop watching for liveness. Called whenever the connection goes away, so a
+	stale watchdog cannot trigger a reconnect after a deliberate disconnect.
+]]
+local function stopWatchdog()
+	Driver.watchdogTimer = cancelTimer(Driver.watchdogTimer)
+	Driver.silentTicks = 0
+end
+
 function Disconnect()
-	if (Driver.reconnectTimer ~= nil) then
-		Driver.reconnectTimer = C4:KillTimer(Driver.reconnectTimer)
-	end
+	Driver.reconnectTimer = cancelTimer(Driver.reconnectTimer)
+	Driver.reconnectAttempt = 0
+	stopWatchdog()
+
 	pcall(function() C4:NetDisconnect(BINDING_CONTROL, PORT_CONTROL) end)
 	Driver.connected = false
 	Driver.configured = false
 	setStatus('Disconnected')
 end
 
+--[[
+	Schedule the next connection attempt, backing off as failures accumulate.
+
+	Deliberately gives up if there is nothing to connect to - no IP or no stored
+	identity - rather than retrying forever against a driver that is not
+	configured yet.
+]]
 local function scheduleReconnect()
-	if (Driver.reconnectTimer ~= nil) then
-		Driver.reconnectTimer = C4:KillTimer(Driver.reconnectTimer)
+	Driver.reconnectTimer = cancelTimer(Driver.reconnectTimer)
+
+	local ip = Properties['Device IP']
+	if (ip == nil or ip == '') then
+		setStatus('Set the Device IP property first')
+		return
 	end
-	Driver.reconnectTimer = C4:AddTimer(RECONNECT_DELAY, 'SECONDS', false)
-	dbg('reconnect in %d seconds', RECONNECT_DELAY)
+	if (Driver.certPem == nil) then
+		setStatus('Not paired - run the Pair action')
+		return
+	end
+
+	Driver.reconnectAttempt = Driver.reconnectAttempt + 1
+	local index = math.min(Driver.reconnectAttempt, #RECONNECT_DELAYS)
+	local delay = RECONNECT_DELAYS[index]
+
+	setStatus('Offline - retrying in %ds (attempt %d)', delay, Driver.reconnectAttempt)
+
+	Driver.reconnectTimer = C4:SetTimer(delay * 1000, function()
+		Driver.reconnectTimer = nil
+		if (not Driver.connected) then Connect() end
+	end)
+end
+
+--[[
+	Start the liveness watchdog. Any inbound traffic resets the counter; see
+	NoteInboundTraffic below.
+]]
+local function startWatchdog()
+	stopWatchdog()
+	Driver.watchdogTimer = C4:SetTimer(WATCHDOG_INTERVAL * 1000, function()
+		if (not Driver.connected) then return end
+
+		Driver.silentTicks = Driver.silentTicks + 1
+		if (Driver.silentTicks < WATCHDOG_LIMIT) then return end
+
+		-- The socket may still look open; Director will not tell us otherwise.
+		dbg('watchdog: %d seconds with no traffic, forcing reconnect',
+			WATCHDOG_INTERVAL * Driver.silentTicks)
+		stopWatchdog()
+		Driver.connected = false
+		Driver.configured = false
+		pcall(function() C4:NetDisconnect(BINDING_CONTROL, PORT_CONTROL) end)
+		scheduleReconnect()
+	end, true)
+end
+
+function NoteInboundTraffic()
+	Driver.silentTicks = 0
+end
+
+--[[
+	Wake the device with a Wake-on-LAN magic packet.
+
+	This is the fallback path for a device asleep enough to refuse TCP, where a
+	key code cannot reach it. Requires Network Standby to be enabled on the device
+	(Settings -> Network & Internet), and does not work over Wi-Fi - both are
+	limitations of WOL itself, not of this driver.
+
+	The MAC is learned from the connection rather than typed in: while connected,
+	the controller's ARP table has an entry, so GetDeviceMAC resolves it. It is
+	persisted because once the device is asleep the ARP entry may be gone.
+]]
+local function learnMac()
+	local ok, mac = pcall(function() return C4:GetDeviceMAC(BINDING_CONTROL) end)
+	if (not ok or mac == nil or mac == '') then return end
+	if (mac == Driver.mac) then return end
+
+	Driver.mac = mac
+	C4:PersistSetValue(PERSIST_MAC, mac)
+	C4:UpdateProperty('Device MAC', mac)
+	dbg('learned device MAC: %s', mac)
 end
 
 local function send(binding, port, data)
@@ -289,6 +409,11 @@ local function handleControlMessage(msg)
 	elseif (msg.kind == 'set_active') then
 		send(BINDING_CONTROL, PORT_CONTROL,
 			atv.buildSetActive(Driver.features or atv.DEFAULT_FEATURES))
+		-- A completed handshake is the only proof the connection really works, so
+		-- the backoff resets here rather than merely on TCP connect.
+		Driver.reconnectAttempt = 0
+		learnMac()
+		startWatchdog()
 		setStatus('Connected')
 
 	elseif (msg.kind == 'ping_request') then
@@ -490,6 +615,51 @@ end
 -- Sending
 --------------------------------------------------------------------------------
 
+function WakeDevice()
+	local mac = Properties['Device MAC']
+	if (mac == nil or mac == '') then mac = Driver.mac end
+
+	if (mac == nil or mac == '') then
+		dbg('cannot send Wake-on-LAN: no MAC known yet (connect once to learn it)')
+		return false
+	end
+
+	dbg('sending Wake-on-LAN to %s', mac)
+	pcall(function() C4:SendWOL(mac) end)
+	return true
+end
+
+--[[
+	Discrete power on. Tries both routes: a WOL packet for a device that is too
+	asleep for TCP, and a WAKEUP key for one that is merely idle. Sending both is
+	harmless - waking an awake device does nothing.
+]]
+function PowerOn()
+	WakeDevice()
+	if (Driver.connected) then
+		SendKeyCode(keycodes.KEYCODE.KEYCODE_WAKEUP, keycodes.DIRECTION.SHORT)
+	else
+		-- Not connected: WOL is the only route, so retry the connection promptly
+		-- rather than waiting out the current backoff.
+		Driver.reconnectAttempt = 0
+		scheduleReconnect()
+	end
+	setStatus('Power on requested')
+end
+
+--[[
+	Discrete power off. Uses SLEEP rather than POWER: POWER toggles, and on this
+	hardware it can reach the TV over CEC, which Control4 controls separately.
+]]
+function PowerOff()
+	if (not Driver.connected) then
+		dbg('power off requested but not connected')
+		return
+	end
+	SendKeyCode(keycodes.KEYCODE.KEYCODE_SLEEP, keycodes.DIRECTION.SHORT)
+	setStatus('Power off requested')
+end
+
 local function requireConnection()
 	if (not Driver.connected) then
 		dbg('not connected; command dropped')
@@ -687,8 +857,8 @@ function OnConnectionStatusChanged(idBinding, nPort, strStatus)
 		elseif (strStatus == 'OFFLINE') then
 			Driver.connected = false
 			Driver.configured = false
-			-- Normal when the device sleeps; retry rather than treating it as failure.
-			setStatus('Offline - retrying in %ds', RECONNECT_DELAY)
+			stopWatchdog()
+			-- Routine when the device sleeps, so this is a retry, not a failure.
 			scheduleReconnect()
 		end
 	end
@@ -733,19 +903,13 @@ function ReceivedFromNetwork(idBinding, nPort, strData)
 	end
 
 	if (idBinding == BINDING_CONTROL) then
+		NoteInboundTraffic()
 		pb.push(Driver.controlBuf, strData)
 		while true do
 			local payload = pb.nextMessage(Driver.controlBuf)
 			if (payload == nil) then break end
 			handleControlMessage(atv.parseMessage(payload))
 		end
-	end
-end
-
-function OnTimerExpired(idTimer)
-	if (idTimer == Driver.reconnectTimer) then
-		Driver.reconnectTimer = nil
-		if (not Driver.connected) then Connect() end
 	end
 end
 
@@ -805,10 +969,20 @@ function ExecuteCommand(strCommand, tParams)
 		Disconnect()
 	elseif (strCommand == 'UNPAIR') then
 		Unpair()
+	elseif (strCommand == 'POWER_ON') then
+		PowerOn()
+	elseif (strCommand == 'POWER_OFF') then
+		PowerOff()
+	elseif (strCommand == 'WAKE') then
+		WakeDevice()
 	elseif (strCommand == 'DIAGNOSTICS') then
 		Diagnostics()
 	elseif (strCommand == 'Launch App') then
 		LaunchApp(tParams['App Link'])
+	elseif (strCommand == 'Power On') then
+		PowerOn()
+	elseif (strCommand == 'Power Off') then
+		PowerOff()
 	elseif (strCommand == 'Send Key') then
 		SendKeyName(tParams['Key Code'])
 	elseif (strCommand == 'LUA_ACTION' and tParams.ACTION ~= nil) then
@@ -846,6 +1020,9 @@ function Diagnostics()
 	dbg('  pair stage    : %s', tostring(Driver.pairStage))
 	dbg('  current app   : %s', tostring(Properties['Current App']))
 	dbg('  power state   : %s', tostring(Properties['Power State']))
+	dbg('  device MAC    : %s', tostring(Properties['Device MAC']))
+	dbg('  retry attempt : %d', Driver.reconnectAttempt or 0)
+	dbg('  silent ticks  : %d', Driver.silentTicks or 0)
 	dbg('  mapped keys   : %d', #keymap.commandNames())
 	dbg('--- end ---')
 end
