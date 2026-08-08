@@ -728,13 +728,29 @@ function SendKeyName(name)
 end
 
 function LaunchApp(appLink)
-	if (appLink == nil or appLink == '') then
+	if (appLink == nil) then
 		dbg('LaunchApp called with no link')
 		return
 	end
+
+	--[[
+		Trim before sending. The device rejected an app link whose bytes were
+		verified byte-identical to Google's protobuf for the same literal, and which
+		succeeded when sent from a desktop client - the difference being that the
+		driver reads the value out of a Control4 variable, where stray whitespace or
+		a trailing newline survives and prints indistinguishably in a log.
+	]]
+	appLink = string.match(tostring(appLink), '^%s*(.-)%s*$') or ''
+
+	if (appLink == '') then
+		dbg('LaunchApp called with an empty link')
+		return
+	end
 	if (not requireConnection()) then return end
+
+	-- Quoted and sized, so an unexpected character is visible next time.
+	dbg('launching %q (%d bytes)', appLink, #appLink)
 	send(BINDING_CONTROL, PORT_CONTROL, atv.buildAppLink(appLink))
-	dbg('launching %s', appLink)
 end
 
 --------------------------------------------------------------------------------

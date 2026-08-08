@@ -269,6 +269,28 @@ def print_miniapp_tests(lua, g) -> None:
         check(f"room selecting proxy {proxy_id} launches {want.decode()}",
               msg.remote_app_link_launch_request.app_link.encode(), want)
 
+    # A value read from a Control4 variable can carry stray whitespace, which the
+    # device rejects while logging identically to a clean string.
+    padded = [
+        b"  com.wbd.stream  ",
+        b"com.wbd.stream" + bytes([10]),                   # trailing newline
+        bytes([9]) + b"com.wbd.stream" + bytes([13, 10]),  # tab, CRLF
+    ]
+    for raw, want in [(r, b"com.wbd.stream") for r in padded]:
+        g.ClearSent()
+        g.LaunchApp(raw)
+        data = g.SentData(1)
+        if data is None:
+            check("whitespace-padded link is sent", "nothing sent", want)
+            continue
+        msg = RemoteMessage()
+        msg.ParseFromString(data[1:])
+        check(f"trims {raw!r}", msg.remote_app_link_launch_request.app_link.encode(), want)
+
+    g.ClearSent()
+    g.LaunchApp(b"   ")
+    check("whitespace-only link sends nothing", g.SentCount(), 0)
+
     # Selecting something that is not one of our mini-apps must do nothing.
     g.ClearSent()
     g.OnWatchedVariableChanged(11, 1000, b"9999")
