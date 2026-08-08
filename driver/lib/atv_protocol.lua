@@ -56,6 +56,27 @@ M.FEATURE = {
 M.DEFAULT_FEATURES = M.FEATURE.PING + M.FEATURE.KEY + M.FEATURE.IME
 	+ M.FEATURE.POWER + M.FEATURE.VOLUME + M.FEATURE.APP_LINK
 
+--- Bitwise AND. DriverWorks ships BitOp, but this avoids depending on it.
+local function band(a, b)
+	local result, place = 0, 1
+	while (a > 0 and b > 0) do
+		if (a % 2 == 1 and b % 2 == 1) then result = result + place end
+		a, b, place = math.floor(a / 2), math.floor(b / 2), place * 2
+	end
+	return result
+end
+
+--[[
+	Claim only the intersection of what we want and what the device advertises in
+	RemoteConfigure.code1. The observed Chromecast offers 639 (everything), so this
+	changes nothing there - but claiming a feature the device lacks is a promise we
+	cannot keep, and the reference implementation masks for the same reason.
+]]
+function M.negotiateFeatures(offered)
+	if (offered == nil or offered == 0) then return M.DEFAULT_FEATURES end
+	return band(M.DEFAULT_FEATURES, offered)
+end
+
 --------------------------------------------------------------------------------
 -- Outbound messages
 --------------------------------------------------------------------------------

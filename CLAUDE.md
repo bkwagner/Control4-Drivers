@@ -98,6 +98,24 @@ the peer-cert limitation. It hinges on one unverified assumption: that Director 
 complete an mTLS handshake with this device. **That is what the spike measures, and
 nothing else should be built until it resolves.**
 
+## Status: the driver works
+
+Paired and connected entirely from the controller on 2026-08-08, with no desktop
+tool involved. Observed sequence:
+
+```
+generating client identity -> reading device certificate
+  harvested server certificate: 836 bytes
+  server public key: modulus 256 bytes, exponent 3 bytes
+connecting to pairing service -> enter code -> secret sent
+Paired. Connecting. -> Connected
+  device: Google Chromecast (features 639)
+  power state: true
+  current app: com.google.android.apps.tv.launcherx
+```
+
+The device advertises feature mask **639** (everything, including APP_LINK).
+
 ## Verified end to end
 
 Milestones 1-4 of [docs/BRIEF.md](docs/BRIEF.md) are complete against the real device:

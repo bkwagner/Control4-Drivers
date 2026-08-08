@@ -68,6 +68,7 @@ Driver = {
 	pairBuf      = nil,
 	connected    = false,
 	configured   = false,   -- server has sent RemoteConfigure and we replied
+	features     = nil,     -- negotiated feature mask
 	reconnectTimer = nil,
 	pairStage    = nil,     -- nil | 'peek' | 'exchange' | 'awaiting_code'
 }
@@ -258,13 +259,16 @@ local function handleControlMessage(msg)
 	if (msg.kind == 'configure') then
 		dbg('device: %s %s (features %d)', tostring(msg.vendor), tostring(msg.model),
 			msg.features or 0)
-		-- Only claim features the device offers, minus voice (needs an audio stream).
-		local features = atv.DEFAULT_FEATURES
-		send(BINDING_CONTROL, PORT_CONTROL, atv.buildConfigure(features, 'atvremote', '1.0.0'))
+		-- Claim only what the device offers, intersected with what we want.
+		Driver.features = atv.negotiateFeatures(msg.features)
+		dbg('negotiated features: %d (device offered %d)', Driver.features, msg.features or 0)
+		send(BINDING_CONTROL, PORT_CONTROL,
+			atv.buildConfigure(Driver.features, 'atvremote', '1.0.0'))
 		Driver.configured = true
 
 	elseif (msg.kind == 'set_active') then
-		send(BINDING_CONTROL, PORT_CONTROL, atv.buildSetActive(atv.DEFAULT_FEATURES))
+		send(BINDING_CONTROL, PORT_CONTROL,
+			atv.buildSetActive(Driver.features or atv.DEFAULT_FEATURES))
 		setStatus('Connected')
 
 	elseif (msg.kind == 'ping_request') then

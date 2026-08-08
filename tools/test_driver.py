@@ -156,6 +156,8 @@ def main() -> None:
     check("reply is a remote_configure", reply.HasField("remote_configure"), True)
     check("reply carries package name",
           reply.remote_configure.device_info.package_name, "atvremote")
+    # We want 615; the device offers 622; the intersection is 614 (PING dropped).
+    check("features masked to what the device offers", reply.remote_configure.code1, 614)
 
     # Ping must be answered or the device hangs up.
     g.ClearSent()
