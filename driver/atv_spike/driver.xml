@@ -1,0 +1,101 @@
+<devicedata>
+	<copyright>2026</copyright>
+	<manufacturer>DIY</manufacturer>
+	<name>ATV Spike</name>
+	<model>Android TV Remote v2 Capability Probe</model>
+	<creator>C4 Google TV project</creator>
+	<created>08/08/2026 00:00</created>
+	<modified>08/08/2026 00:00</modified>
+	<version>1</version>
+	<control>lua_gen</control>
+	<driver>DriverWorks</driver>
+	<minimum_os_version>3.4.1</minimum_os_version>
+	<config>
+		<script file="driver.lua"></script>
+		<properties>
+			<property>
+				<name>Device IP</name>
+				<default></default>
+				<type>STRING</type>
+				<readonly>false</readonly>
+				<description>IP address of the Google TV / Android TV device. Set a DHCP reservation for it.</description>
+			</property>
+			<property>
+				<name>Port</name>
+				<type>LIST</type>
+				<items>
+					<item>6467</item>
+					<item>6466</item>
+				</items>
+				<default>6467</default>
+				<readonly>false</readonly>
+				<description>6467 = pairing port (accepts any self-signed client cert, so it is the right target for a transport test). 6466 = remote control port (requires an already-paired cert).</description>
+			</property>
+			<property>
+				<name>TLS Method</name>
+				<type>LIST</type>
+				<items>
+					<item>sslv23</item>
+					<item>tlsv1_2</item>
+					<item>tlsv1_1</item>
+					<item>tlsv1</item>
+				</items>
+				<default>sslv23</default>
+				<readonly>false</readonly>
+				<description>VERIFY_METHOD passed to NetPortOptions. USE sslv23 - it negotiates the highest mutually supported version. The device was measured to require TLS 1.2 minimum (it rejects 1.0 and 1.1 with alert 70), so tlsv1 and tlsv1_1 are known-dead and are listed only to confirm the failure mode. Try tlsv1_2 second if sslv23 fails, though it may not be an accepted value.</description>
+			</property>
+			<property>
+				<name>Cert Path Form</name>
+				<type>LIST</type>
+				<items>
+					<item>./atv_client.pem</item>
+					<item>atv_client.pem</item>
+					<item>SANDBOX:/atv_client.pem</item>
+					<item>C4Z:/atv_client.pem</item>
+				</items>
+				<default>./atv_client.pem</default>
+				<readonly>false</readonly>
+				<description>How the CERTIFICATE / PRIVATE_KEY paths are spelled in NetPortOptions. The SDK says these are relative to the .c4z directory, but the cert is generated at runtime into the sandbox - discovering which spelling resolves is a spike goal.</description>
+			</property>
+			<property>
+				<name>Last Result</name>
+				<default>(not run)</default>
+				<type>STRING</type>
+				<readonly>true</readonly>
+				<description>Summary of the most recent spike step.</description>
+			</property>
+		</properties>
+		<actions>
+			<action>
+				<name>Step 1 - OpenSSL Capability Test</name>
+				<command>SPIKE_OPENSSL</command>
+			</action>
+			<action>
+				<name>Step 2 - Write Cert Files</name>
+				<command>SPIKE_WRITE_CERT</command>
+			</action>
+			<action>
+				<name>Step 3 - TLS Connect</name>
+				<command>SPIKE_CONNECT</command>
+			</action>
+			<action>
+				<name>Step 4 - Disconnect</name>
+				<command>SPIKE_DISCONNECT</command>
+			</action>
+			<action>
+				<name>Print Summary</name>
+				<command>SPIKE_SUMMARY</command>
+			</action>
+		</actions>
+	</config>
+	<!--
+		A driver with no <proxies> has no device type, and Composer categorizes the
+		driver search by device type - so it silently never appears in the list.
+		Utility drivers with no real device behind them declare a proxy named after
+		themselves; every sample driver in the SDK does this.
+	-->
+	<combo>true</combo>
+	<proxies>
+		<proxy>atv_spike</proxy>
+	</proxies>
+</devicedata>
