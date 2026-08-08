@@ -152,8 +152,17 @@
 	<proxies>
 		<proxy proxybindingid="5001" name="Google TV" primary="True">media_player</proxy>
 		<!--
-			Dedicated switcher proxy carrying the universal mini-app inputs. Hidden in
-			every room at init so it does not appear as a device of its own.
+			The switcher owns the external AV output and everything feeds into it:
+			the media_player on one input, the mini-apps on the rest. That is what an
+			AV switch is, and it is why only this proxy needs binding to the TV.
+
+			The shipping Roku driver routes through a third media_service proxy
+			instead, but that proxy exists for its app-browsing UI; adding one here
+			without implementing the media service API would put an empty Apps
+			experience in Navigator.
+
+			Hidden in every room at init so it is not selectable as a device itself -
+			hiding affects the Navigator device list, not AV routing.
 		-->
 		<proxy proxybindingid="5999" name="Google TV Apps">avswitch</proxy>
 	</proxies>
@@ -175,18 +184,6 @@
 			</classes>
 			<hidden>True</hidden>
 		</connection>
-		<connection proxybindingid="5001">
-			<id>2001</id>
-			<type>5</type>
-			<connectionname>HDMI OUT</connectionname>
-			<consumer>False</consumer>
-			<linelevel>True</linelevel>
-			<classes>
-				<class>
-					<classname>HDMI</classname>
-				</class>
-			</classes>
-		</connection>
 		<connection>
 			<id>5999</id>
 			<type>2</type>
@@ -199,48 +196,16 @@
 				</class>
 			</classes>
 		</connection>
+
 		<!--
-			Inputs on the main proxy for the switcher's outputs to bind to. The SDK
-			template is explicit that the switcher's AV out connects to the "main"
-			proxy rather than to the display: the path runs
-			minidriver -> switcher input -> switcher out -> here -> HDMI OUT -> TV.
-			Without these the switcher output has nowhere to go and mini-apps never
-			reach a room.
+			Internal hop: the media_player feeds the switcher. Both ends are autobind
+			and hidden, so Composer wires this up itself and the installer never sees
+			it - matching how the Roku driver handles the same link.
 		-->
 		<connection proxybindingid="5001">
-			<id>1001</id>
+			<id>2010</id>
 			<type>5</type>
-			<connectionname>App Switch Video In</connectionname>
-			<consumer>True</consumer>
-			<linelevel>True</linelevel>
-			<classes>
-				<class>
-					<classname>HDMI</classname>
-				</class>
-			</classes>
-		</connection>
-		<connection proxybindingid="5001">
-			<id>3001</id>
-			<type>6</type>
-			<connectionname>App Switch Audio In</connectionname>
-			<consumer>True</consumer>
-			<linelevel>True</linelevel>
-			<classes>
-				<class>
-					<classname>STEREO</classname>
-				</class>
-			</classes>
-		</connection>
-		<!--
-			AV outputs for the switcher proxy. Without these the switcher is not in
-			any room's AV path, and mini-apps bound to it never appear in a room -
-			they have no route to the display. The SDK template uses COMPONENT here;
-			HDMI is used instead because that is what this device actually has.
-		-->
-		<connection proxybindingid="5999">
-			<id>2110</id>
-			<type>5</type>
-			<connectionname>App Switch Video Out</connectionname>
+			<connectionname>Google TV Video Out</connectionname>
 			<consumer>False</consumer>
 			<linelevel>True</linelevel>
 			<classes>
@@ -249,11 +214,12 @@
 					<autobind>true</autobind>
 				</class>
 			</classes>
+			<hidden>True</hidden>
 		</connection>
-		<connection proxybindingid="5999">
-			<id>4110</id>
+		<connection proxybindingid="5001">
+			<id>4010</id>
 			<type>6</type>
-			<connectionname>App Switch Audio Out</connectionname>
+			<connectionname>Google TV Audio Out</connectionname>
 			<consumer>False</consumer>
 			<linelevel>True</linelevel>
 			<classes>
@@ -262,12 +228,71 @@
 					<autobind>true</autobind>
 				</class>
 			</classes>
+			<hidden>True</hidden>
 		</connection>
+		<connection proxybindingid="5999">
+			<id>1010</id>
+			<type>5</type>
+			<connectionname>Video In from Google TV</connectionname>
+			<consumer>True</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>HDMI</classname>
+					<autobind>true</autobind>
+				</class>
+			</classes>
+			<hidden>True</hidden>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3010</id>
+			<type>6</type>
+			<connectionname>Audio In from Google TV</connectionname>
+			<consumer>True</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>STEREO</classname>
+					<autobind>true</autobind>
+				</class>
+			</classes>
+			<hidden>True</hidden>
+		</connection>
+
 		<!--
-			Universal mini-app inputs, 3101-3125. Bind an app minidriver (Netflix,
-			Jellyfin, HBO Max ...) to any of these in Composer's Connections view and
-			it will launch on this device. Kept below 3199: on TV and receiver proxies,
-			inputs above x099 do not raise events or variable changes.
+			The one connection the installer binds: this goes to the TV input the
+			device is physically plugged into.
+		-->
+		<connection proxybindingid="5999">
+			<id>2001</id>
+			<type>5</type>
+			<connectionname>HDMI OUT</connectionname>
+			<consumer>False</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>HDMI</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>4001</id>
+			<type>6</type>
+			<connectionname>AUDIO OUT</connectionname>
+			<consumer>False</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>STEREO</classname>
+				</class>
+			</classes>
+		</connection>
+
+		<!--
+			Universal mini-app inputs. Bind an app minidriver (Netflix, Jellyfin,
+			HBO Max ...) to any of these and it will launch on this device. Kept
+			below 3199: on TV and receiver proxies, inputs above x099 do not raise
+			events or variable changes.
 		-->
 		<connection proxybindingid="5999">
 			<id>3101</id>
@@ -278,6 +303,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -290,6 +316,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -302,6 +329,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -314,6 +342,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -326,6 +355,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -338,6 +368,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -350,6 +381,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -362,6 +394,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -374,6 +407,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -386,6 +420,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -398,6 +433,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -410,6 +446,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -422,6 +459,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -434,6 +472,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -446,6 +485,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -458,6 +498,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -470,6 +511,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -482,6 +524,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -494,6 +537,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -506,6 +550,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -518,6 +563,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -530,6 +576,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -542,6 +589,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -554,6 +602,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -566,6 +615,7 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
