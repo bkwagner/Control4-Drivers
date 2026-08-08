@@ -1070,5 +1070,37 @@ function Diagnostics()
 	dbg('  retry attempt : %d', Driver.reconnectAttempt or 0)
 	dbg('  silent ticks  : %d', Driver.silentTicks or 0)
 	dbg('  mapped keys   : %d', #keymap.commandNames())
+
+	--[[
+		Walk the mini-app binding chain and report what the driver can actually
+		see. If a minidriver is bound in Composer but does not appear here, the
+		problem is the binding or the AV path, not the launch code.
+	]]
+	local switcherId, switcherName = next(
+		C4:GetBoundConsumerDevices(C4:GetDeviceID(), BINDING_SWITCHER) or {})
+	dbg('  switcher proxy: %s (%s)', tostring(switcherId), tostring(switcherName))
+
+	if (switcherId == nil) then
+		dbg('  !! switcher proxy is not bound - no mini-app can work')
+	else
+		local found = 0
+		for input = MINIAPP_BINDING_START, MINIAPP_BINDING_END do
+			local appProxyId = C4:GetBoundProviderDevice(switcherId, input)
+			if (appProxyId ~= nil and appProxyId ~= 0) then
+				found = found + 1
+				local appDeviceId = C4:GetBoundProviderDevice(appProxyId, BINDING_PROXY)
+				local appId   = appDeviceId and getUniversalAppId(appDeviceId, MINIAPP_TYPE)
+				local appName = appDeviceId and getUniversalAppId(appDeviceId, 'APP_NAME')
+				dbg('  input %d: proxy=%s protocol=%s name=%s id=%s',
+					input, tostring(appProxyId), tostring(appDeviceId),
+					tostring(appName), tostring(appId))
+				if (appId == nil or appId == '') then
+					dbg('    !! no %s service id - this app cannot be launched', MINIAPP_TYPE)
+				end
+			end
+		end
+		dbg('  mini-apps bound: %d', found)
+	end
+
 	dbg('--- end ---')
 end
