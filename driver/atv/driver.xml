@@ -67,7 +67,7 @@
 				<default></default>
 				<type>STRING</type>
 				<readonly>false</readonly>
-				<description>Used for Wake-on-LAN. Learned automatically on the first successful connection - only set this by hand if that fails. Wake-on-LAN needs Network Standby enabled on the device and does not work over Wi-Fi.</description>
+				<description>Used for Wake-on-LAN. Learned automatically on the first successful connection - only set this by hand if that fails. NOTE: Wake-on-LAN only works for a WIRED device. On Wi-Fi it cannot work at all, and waking depends instead on Network Standby (Settings - Network and Internet) keeping the connection alive through standby.</description>
 			</property>
 			<property>
 				<name>Debug Mode</name>

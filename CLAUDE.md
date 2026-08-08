@@ -140,10 +140,20 @@ The device drops TCP whenever it sleeps, so disconnection is routine, not a faul
 - **A liveness watchdog** catches half-open sockets, which Director does not report.
   The device pings on its own schedule, so silence is the signal: 90 seconds with
   nothing inbound forces a reconnect regardless of what the socket claims.
-- **Wake-on-LAN** is the only route to a device too asleep for TCP. The MAC is learned
+- **Wake-on-LAN** is the fallback for a device too asleep for TCP. The MAC is learned
   via `GetDeviceMAC` while connected (the ARP entry exists then) and persisted,
-  because once the device sleeps the ARP entry may be gone. Needs Network Standby on
-  the device, and does not work over Wi-Fi — both are WOL limitations.
+  because once the device sleeps the ARP entry may be gone.
+
+  ⚠️ **The target device is on Wi-Fi, so WOL cannot work for it.** Magic packets need
+  a NIC that stays powered and listening; Wi-Fi adapters do not. This is a limitation
+  of WOL, not something the driver can route around. The code path is kept because it
+  is correct for a wired device, and sending a packet that goes nowhere is harmless.
+
+  On Wi-Fi the wake path is **Network Standby** (Settings → Network & Internet)
+  instead: with it enabled the device keeps its connection alive in standby, so the
+  driver stays connected and a wake keycode reaches it over the existing session. If
+  the connection does *not* survive standby, waking a Wi-Fi device is not achievable
+  through this protocol.
 - **Retrying stops** when there is no IP or no stored identity. Nothing to connect to
   is a configuration state, not a transient failure.
 
