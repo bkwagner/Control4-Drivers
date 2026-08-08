@@ -293,6 +293,12 @@
 			HBO Max ...) to any of these and it will launch on this device. Kept
 			below 3199: on TV and receiver proxies, inputs above x099 do not raise
 			events or variable changes.
+
+			Deliberately NOT autobind, unlike the Roku driver. Roku can assume it is
+			the only device hosting mini-apps; here the Sony TV hosts them too, and
+			autobind grabs every minidriver in the project - including ones already
+			assigned to the TV. Which app launches on which device is the
+			installer's decision, so these are bound by hand.
 		-->
 		<connection proxybindingid="5999">
 			<id>3101</id>
@@ -303,7 +309,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -316,7 +321,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -329,7 +333,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -342,7 +345,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -355,7 +357,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -368,7 +369,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -381,7 +381,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -394,7 +393,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -407,7 +405,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -420,7 +417,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -433,7 +429,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -446,7 +441,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -459,7 +453,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -472,7 +465,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -485,7 +477,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -498,7 +489,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -511,7 +501,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -524,7 +513,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -537,7 +525,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -550,7 +537,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -563,7 +549,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -576,7 +561,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -589,7 +573,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -602,7 +585,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -615,7 +597,6 @@
 			<classes>
 				<class>
 					<classname>RF_MINI_APP</classname>
-					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
