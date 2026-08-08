@@ -124,6 +124,15 @@ function LastTimerMs()
     end
 end
 function ClearTimers() Timers = {} end
+function FireTimerMs(ms)
+    for i = #Timers, 1, -1 do
+        if (not Timers[i].cancelled and Timers[i].ms == ms) then
+            Timers[i].callback(Timers[i])
+            return true
+        end
+    end
+    return false
+end
 function CallCount(name)
     local n = 0
     for _, c in ipairs(Calls) do if (c.name == name) then n = n + 1 end end
@@ -276,11 +285,23 @@ def print_resilience_tests() -> None:
     g.OnDriverLateInit()
 
     # Successive failures must back off rather than hammer a sleeping device.
+    # Asserted from the Status text rather than timer internals: several timers are
+    # live at once (retry, connect timeout, offline suppression).
+    import re
+
+    def retry_delay():
+        status = (g.Prop(b"Status") or b"").decode()
+        found = re.search(r"retrying in (\d+)s", status)
+        return int(found.group(1)) if found else None
+
     delays = []
     for _ in range(7):
+        # A second has passed since our own disconnect, so suppression has lapsed.
+        g.Driver.ignoreOffline = False
         g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"OFFLINE")
-        delays.append(g.LastTimerMs() / 1000)
-        g.FireTimer(1)          # fire the retry, which attempts to connect again
+        delay = retry_delay()
+        delays.append(delay)
+        g.FireTimerMs(delay * 1000)     # fire the retry; it attempts to connect
     check("backoff escalates then caps", delays, [5, 10, 20, 40, 60, 60, 60])
 
     # A completed handshake proves the connection works, so the backoff resets.
@@ -295,8 +316,9 @@ def print_resilience_tests() -> None:
     check("MAC learned from the connection",
           g.Prop(b"Device MAC"), b"38:18:4C:70:F5:3F")
 
+    g.Driver.ignoreOffline = False
     g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"OFFLINE")
-    check("next failure starts from the shortest delay", g.LastTimerMs() / 1000, 5)
+    check("next failure starts from the shortest delay", retry_delay(), 5)
 
     # Watchdog: a half-open socket delivers nothing and Director never reports it.
     lua = load_driver()
@@ -348,6 +370,37 @@ def print_resilience_tests() -> None:
     g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
     g.WakeDevice()
     check("WOL sent once the MAC is learned", g.CallCount(b"SendWOL"), 1)
+
+    # A connection attempt that never resolves must not strand the driver.
+    # Observed on hardware: connecting to a device that is still booting produced
+    # neither ONLINE nor OFFLINE, and the driver sat at "Connecting..." forever.
+    lua = load_driver()
+    g = lua.globals()
+    g.SetPaired(b"cert", b"key")
+    g.OnDriverInit()
+    g.OnDriverLateInit()          # this attempts a connection
+    check("attempt is in progress", b"Connecting" in (g.Prop(b"Status") or b""), True)
+
+    g.FireTimer(1)                # fire the attempt timeout; no ONLINE ever arrived
+    check("timed-out attempt schedules a retry",
+          b"retrying" in (g.Prop(b"Status") or b""), True)
+
+    # Our own NetDisconnect inside Connect must not look like a device-side drop:
+    # acting on it schedules a spurious retry and inflates the attempt counter.
+    lua = load_driver()
+    g = lua.globals()
+    g.SetPaired(b"cert", b"key")
+    g.OnDriverInit()
+    g.OnDriverLateInit()
+    before = g.Driver.reconnectAttempt
+    g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"OFFLINE")
+    check("self-inflicted OFFLINE is ignored", g.Driver.reconnectAttempt, before)
+
+    # Once the suppression window lapses, a real drop is acted on again.
+    g.Driver.ignoreOffline = False
+    g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"OFFLINE")
+    check("a real OFFLINE still schedules a retry",
+          g.Driver.reconnectAttempt, before + 1)
 
     # Nothing to connect to: retrying forever would be pointless.
     lua = load_driver()

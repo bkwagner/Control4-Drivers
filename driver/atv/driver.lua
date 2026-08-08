@@ -92,6 +92,17 @@ local RECONNECT_DELAYS = { 5, 10, 20, 40, 60 }
 local WATCHDOG_INTERVAL = 30
 local WATCHDOG_LIMIT    = 3
 
+--[[
+	How long a connection attempt may take before it is abandoned.
+
+	Director does not always report a failed attempt. Connecting to a device that
+	is still booting can produce neither ONLINE nor OFFLINE, leaving the driver
+	waiting forever with no retry scheduled - observed on hardware after pulling
+	the device's power. This covers both a TCP connect that never completes and a
+	socket that opens but never finishes the protocol handshake.
+]]
+local CONNECT_TIMEOUT = 30
+
 local PERSIST_MAC = 'device_mac'
 
 --------------------------------------------------------------------------------
@@ -113,6 +124,8 @@ Driver = {
 	reconnectTimer  = nil,
 	reconnectAttempt = 0,   -- index into RECONNECT_DELAYS
 	watchdogTimer   = nil,
+	connectTimer    = nil,  -- abandons a connection attempt that never resolves
+	ignoreOffline   = false,-- suppresses the OFFLINE our own NetDisconnect causes
 	silentTicks     = 0,    -- watchdog ticks with no inbound traffic
 	mac             = nil,  -- learned from the connection, used for Wake-on-LAN
 }
@@ -250,6 +263,33 @@ local function portParams()
 	}
 end
 
+local function cancelTimer(timer)
+	if (timer ~= nil) then pcall(function() timer:Cancel() end) end
+	return nil
+end
+
+--[[
+	Stop watching for liveness. Called whenever the connection goes away, so a
+	stale watchdog cannot trigger a reconnect after a deliberate disconnect.
+]]
+local function stopWatchdog()
+	Driver.watchdogTimer = cancelTimer(Driver.watchdogTimer)
+	Driver.silentTicks = 0
+end
+
+--[[
+	Disconnect without the resulting OFFLINE being mistaken for the device
+	dropping us. Director reports our own teardown the same way it reports a real
+	drop, and acting on it schedules a spurious reconnect and inflates the retry
+	counter. The flag is cleared on a short timer because delivery may be
+	asynchronous.
+]]
+local function disconnectQuietly()
+	Driver.ignoreOffline = true
+	pcall(function() C4:NetDisconnect(BINDING_CONTROL, PORT_CONTROL) end)
+	C4:SetTimer(1000, function() Driver.ignoreOffline = false end)
+end
+
 function Connect()
 	local ip = Properties['Device IP']
 	if (ip == nil or ip == '') then
@@ -270,30 +310,31 @@ function Connect()
 	Driver.controlBuf = pb.newBuffer()
 	Driver.configured = false
 
-	pcall(function() C4:NetDisconnect(BINDING_CONTROL, PORT_CONTROL) end)
+	disconnectQuietly()
 	C4:CreateNetworkConnection(BINDING_CONTROL, ip, 'SSL')
 	C4:NetPortOptions(BINDING_CONTROL, PORT_CONTROL, 'SSL', portParams())
 	C4:NetConnect(BINDING_CONTROL, PORT_CONTROL)
 
+	-- Abandon the attempt if it neither succeeds nor fails.
+	Driver.connectTimer = cancelTimer(Driver.connectTimer)
+	Driver.connectTimer = C4:SetTimer(CONNECT_TIMEOUT * 1000, function()
+		Driver.connectTimer = nil
+		if (Driver.configured) then return end
+
+		dbg('connection attempt timed out after %ds', CONNECT_TIMEOUT)
+		Driver.connected = false
+		Driver.configured = false
+		stopWatchdog()
+		disconnectQuietly()
+		ScheduleReconnect()
+	end)
+
 	setStatus('Connecting to %s:%d', ip, PORT_CONTROL)
-end
-
-local function cancelTimer(timer)
-	if (timer ~= nil) then pcall(function() timer:Cancel() end) end
-	return nil
-end
-
---[[
-	Stop watching for liveness. Called whenever the connection goes away, so a
-	stale watchdog cannot trigger a reconnect after a deliberate disconnect.
-]]
-local function stopWatchdog()
-	Driver.watchdogTimer = cancelTimer(Driver.watchdogTimer)
-	Driver.silentTicks = 0
 end
 
 function Disconnect()
 	Driver.reconnectTimer = cancelTimer(Driver.reconnectTimer)
+	Driver.connectTimer = cancelTimer(Driver.connectTimer)
 	Driver.reconnectAttempt = 0
 	stopWatchdog()
 
@@ -310,7 +351,7 @@ end
 	identity - rather than retrying forever against a driver that is not
 	configured yet.
 ]]
-local function scheduleReconnect()
+function ScheduleReconnect()
 	Driver.reconnectTimer = cancelTimer(Driver.reconnectTimer)
 
 	local ip = Properties['Device IP']
@@ -354,7 +395,7 @@ local function startWatchdog()
 		Driver.connected = false
 		Driver.configured = false
 		pcall(function() C4:NetDisconnect(BINDING_CONTROL, PORT_CONTROL) end)
-		scheduleReconnect()
+		ScheduleReconnect()
 	end, true)
 end
 
@@ -412,6 +453,7 @@ local function handleControlMessage(msg)
 		-- A completed handshake is the only proof the connection really works, so
 		-- the backoff resets here rather than merely on TCP connect.
 		Driver.reconnectAttempt = 0
+		Driver.connectTimer = cancelTimer(Driver.connectTimer)
 		learnMac()
 		startWatchdog()
 		setStatus('Connected')
@@ -642,7 +684,7 @@ function PowerOn()
 		-- Not connected: WOL is the only route, so retry the connection promptly
 		-- rather than waiting out the current backoff.
 		Driver.reconnectAttempt = 0
-		scheduleReconnect()
+		ScheduleReconnect()
 	end
 	setStatus('Power on requested')
 end
@@ -855,11 +897,15 @@ function OnConnectionStatusChanged(idBinding, nPort, strStatus)
 			Driver.controlBuf = pb.newBuffer()
 			setStatus('Connected - waiting for device configuration')
 		elseif (strStatus == 'OFFLINE') then
+			if (Driver.ignoreOffline) then
+				dbg('ignoring OFFLINE from our own disconnect')
+				return
+			end
 			Driver.connected = false
 			Driver.configured = false
 			stopWatchdog()
 			-- Routine when the device sleeps, so this is a retry, not a failure.
-			scheduleReconnect()
+			ScheduleReconnect()
 		end
 	end
 end
