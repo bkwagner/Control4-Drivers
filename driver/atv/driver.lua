@@ -1096,8 +1096,8 @@ function Diagnostics()
 	dbg('  --- AV path ---')
 	reportBinding('HDMI OUT (2001)', 2001)
 	reportBinding('AUDIO OUT (4001)', 4001)
-	reportBinding('media_player out (2010)', 2010)
-	reportBinding('switcher in (1010)', 1010)
+	reportBinding('switcher out (2110)', 2110)
+	reportBinding('media_player in (1010)', 1010)
 
 	local switcherId, switcherName = next(
 		C4:GetBoundConsumerDevices(C4:GetDeviceID(), BINDING_SWITCHER) or {})
