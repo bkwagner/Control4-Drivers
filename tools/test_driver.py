@@ -253,6 +253,32 @@ def print_miniapp_tests(lua, g) -> None:
     set_input(9999)
     check("out-of-range input ignored", g.SentCount(), 0)
 
+    # A media_player proxy does not receive SET_INPUT - measured on hardware,
+    # where selecting a mini-app produced only ON and SELECT_SOURCE. The driver
+    # therefore launches from the room's selected-device variable instead.
+    g.RefreshMiniApps()
+    for proxy_id, want in [(300, b"org.jellyfin.androidtv"), (310, b"com.wbd.stream")]:
+        g.ClearSent()
+        g.OnWatchedVariableChanged(11, 1000, str(proxy_id).encode())
+        data = g.SentData(1)
+        if data is None:
+            check(f"room selecting proxy {proxy_id} launches", "nothing sent", want)
+            continue
+        msg = RemoteMessage()
+        msg.ParseFromString(data[1:])
+        check(f"room selecting proxy {proxy_id} launches {want.decode()}",
+              msg.remote_app_link_launch_request.app_link.encode(), want)
+
+    # Selecting something that is not one of our mini-apps must do nothing.
+    g.ClearSent()
+    g.OnWatchedVariableChanged(11, 1000, b"9999")
+    check("selecting an unrelated source launches nothing", g.SentCount(), 0)
+
+    # A different room variable must not be mistaken for a source change.
+    g.ClearSent()
+    g.OnWatchedVariableChanged(11, 1007, b"300")
+    check("other room variables ignored", g.SentCount(), 0)
+
     # While a mini-app is the selected source, remote keys arrive wrapped as
     # PASSTHROUGH on the switcher binding and must still reach the device.
     params = lua.table()

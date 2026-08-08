@@ -754,6 +754,39 @@ local function getUniversalAppId(deviceId, source)
 	end
 end
 
+--[[
+	Map each bound mini-app's proxy device to the app it launches.
+
+	This exists because a media_player proxy does not receive SET_INPUT - measured
+	on hardware, where selecting a mini-app produced only ON and SELECT_SOURCE. So
+	the driver cannot be told which app was chosen; it has to work it out.
+
+	When a room selects a mini-app, the room's selected-device variable becomes
+	that mini-app's proxy id, and we already listen to that variable. Looking the
+	id up here turns "some source was selected" into "launch this app".
+]]
+function RefreshMiniApps()
+	MiniAppByProxy = {}
+
+	local switcherId = next(C4:GetBoundConsumerDevices(C4:GetDeviceID(), BINDING_SWITCHER) or {})
+	if (switcherId == nil) then return end
+
+	local count = 0
+	for input = MINIAPP_BINDING_START, MINIAPP_BINDING_END do
+		local appProxyId = C4:GetBoundProviderDevice(switcherId, input)
+		if (appProxyId ~= nil and appProxyId ~= 0) then
+			local appDeviceId = C4:GetBoundProviderDevice(appProxyId, BINDING_PROXY)
+			local appId   = appDeviceId and getUniversalAppId(appDeviceId, MINIAPP_TYPE)
+			local appName = appDeviceId and getUniversalAppId(appDeviceId, 'APP_NAME')
+			if (appId ~= nil and appId ~= '') then
+				MiniAppByProxy[appProxyId] = { id = appId, name = appName, input = input }
+				count = count + 1
+			end
+		end
+	end
+	dbg('mini-apps available to launch: %d', count)
+end
+
 --- Track which device each room currently has selected.
 function RegisterRooms()
 	RoomIDs = C4:GetDevicesByC4iName('roomdevice.c4i') or {}
@@ -840,6 +873,7 @@ end
 function OnDriverLateInit()
 	hideSwitcherProxy()
 	RegisterRooms()
+	RefreshMiniApps()
 
 	if (loadIdentity()) then
 		setStatus('Paired - connecting')
@@ -859,13 +893,24 @@ function OnSystemEvent(event)
 	if (name == 'OnPIP') then
 		dbg('project bindings changed; re-registering rooms')
 		RegisterRooms()
+		RefreshMiniApps()
 	end
 end
 
 function OnWatchedVariableChanged(idDevice, idVariable, strValue)
-	if (RoomIDs ~= nil and RoomIDs[idDevice] ~= nil
-		and idVariable == ROOM_SELECTED_DEVICE) then
-		RoomIDSources[tonumber(idDevice)] = tonumber(strValue) or 0
+	if (idVariable ~= ROOM_SELECTED_DEVICE) then return end
+
+	local selected = tonumber(strValue) or 0
+	if (RoomIDs ~= nil and RoomIDs[idDevice] ~= nil) then
+		RoomIDSources[tonumber(idDevice)] = selected
+	end
+
+	-- The selected source is a mini-app bound to us: launch it.
+	local app = MiniAppByProxy and MiniAppByProxy[selected]
+	if (app ~= nil) then
+		dbg('room %s selected mini-app %s (%s)', tostring(idDevice),
+			tostring(app.name), app.id)
+		LaunchApp(app.id)
 	end
 end
 
