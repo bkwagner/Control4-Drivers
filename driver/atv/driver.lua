@@ -1076,6 +1076,29 @@ function Diagnostics()
 		see. If a minidriver is bound in Composer but does not appear here, the
 		problem is the binding or the AV path, not the launch code.
 	]]
+	--[[
+		The AV path. A mini-app only appears in a room if the switcher can reach a
+		display, so an unbound HDMI OUT explains "bound but invisible" exactly.
+	]]
+	local function reportBinding(label, binding)
+		local id, name = next(C4:GetBoundConsumerDevices(C4:GetDeviceID(), binding) or {})
+		if (id == nil) then
+			id, name = C4:GetBoundProviderDevice(C4:GetDeviceID(), binding), nil
+		end
+		if (id == nil or id == 0) then
+			dbg('  %-22s: NOT BOUND', label)
+		else
+			dbg('  %-22s: bound to %s%s', label, tostring(id),
+				name and (' (' .. tostring(name) .. ')') or '')
+		end
+	end
+
+	dbg('  --- AV path ---')
+	reportBinding('HDMI OUT (2001)', 2001)
+	reportBinding('AUDIO OUT (4001)', 4001)
+	reportBinding('media_player out (2010)', 2010)
+	reportBinding('switcher in (1010)', 1010)
+
 	local switcherId, switcherName = next(
 		C4:GetBoundConsumerDevices(C4:GetDeviceID(), BINDING_SWITCHER) or {})
 	dbg('  switcher proxy: %s (%s)', tostring(switcherId), tostring(switcherName))
