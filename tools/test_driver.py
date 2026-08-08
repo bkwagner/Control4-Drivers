@@ -67,6 +67,8 @@ local function record(name, ...)
     table.insert(Calls, { name = name, args = { ... } })
 end
 
+C4SystemEvents = { OnPIP = 1 }
+
 C4 = {}
 function C4:UpdateProperty(name, value)
     Props[name] = value
@@ -90,6 +92,43 @@ function C4:NetDisconnect(...)           record('NetDisconnect', ...) end
 function C4:AddTimer(...)                record('AddTimer', ...) return 1 end
 function C4:KillTimer(...)               record('KillTimer', ...) return nil end
 function C4:ErrorLog(...)                record('ErrorLog', ...) end
+function C4:GetDeviceID() return 99 end
+function C4:RegisterSystemEvent(...) end
+function C4:UnregisterSystemEvent(...) end
+function C4:RegisterVariableListener(...) end
+function C4:UnregisterVariableListener(...) end
+function C4:GetDevicesByC4iName(...) return {} end
+function C4:GetDeviceVariable(...) return '0' end
+function C4:SendToDevice(...) record('SendToDevice', ...) end
+
+-- Mini-app binding chain, configurable per test:
+--   switcher proxy 5999 -> device 200
+--   input 3101          -> app proxy 300
+--   app proxy 5001      -> app protocol driver 400, which publishes the vars
+MiniApp = { switcher = 200, byInput = {}, vars = {} }
+function C4:GetBoundConsumerDevices(deviceId, binding)
+    if (binding == 5999 and MiniApp.switcher) then
+        return { [MiniApp.switcher] = 'Google TV Apps' }
+    end
+    return {}
+end
+function C4:GetBoundProviderDevice(deviceId, binding)
+    if (deviceId == MiniApp.switcher) then return MiniApp.byInput[binding] end
+    if (binding == 5001) then return (deviceId and deviceId + 100) end
+    return nil
+end
+function C4:GetDeviceVariables(deviceId)
+    return MiniApp.vars[deviceId] or {}
+end
+function SetMiniApp(input, proxyId, serviceId, appName)
+    MiniApp.byInput[input] = proxyId
+    MiniApp.vars[proxyId + 100] = {
+        { name = 'UM_NV_SHIELD', value = serviceId },
+        { name = 'UM_SONY_TV',   value = 'Some Title' },
+        { name = 'APP_NAME',     value = appName },
+    }
+end
+function ClearMiniApps() MiniApp.byInput = {}; MiniApp.vars = {} end
 
 -- Minimal lua-openssl. Only the calls the driver makes on paths under test.
 package.preload['openssl'] = function()
@@ -133,6 +172,52 @@ def load_driver():
     lua.execute(LUA_STUBS)
     lua.execute((DRIVER / "atv" / "driver.lua").read_bytes())
     return lua
+
+
+def print_miniapp_tests(lua, g) -> None:
+    """Navigator selecting a bound app minidriver must launch it on the device."""
+    print()
+    print("mini-app launching")
+
+    g.SetMiniApp(3101, 300, b"org.jellyfin.androidtv", b"Jellyfin")
+    g.SetMiniApp(3102, 310, b"com.wbd.stream", b"HBO Max")
+
+    def set_input(value):
+        params = lua.table()
+        params[b"INPUT"] = value
+        g.ClearSent()
+        g.ReceivedFromProxy(5999, b"SET_INPUT", params)
+
+    for input_id, want in [(3101, b"org.jellyfin.androidtv"), (3102, b"com.wbd.stream")]:
+        set_input(input_id)
+        data = g.SentData(1)
+        if data is None:
+            check(f"input {input_id} launches {want.decode()}", "nothing sent", want)
+            continue
+        msg = RemoteMessage()
+        msg.ParseFromString(data[1:])
+        check(f"input {input_id} launches {want.decode()}",
+              msg.remote_app_link_launch_request.app_link.encode(), want)
+
+    set_input(3110)
+    check("unbound mini-app input launches nothing", g.SentCount(), 0)
+
+    set_input(9999)
+    check("out-of-range input ignored", g.SentCount(), 0)
+
+    # While a mini-app is the selected source, remote keys arrive wrapped as
+    # PASSTHROUGH on the switcher binding and must still reach the device.
+    params = lua.table()
+    params[b"PASSTHROUGH_COMMAND"] = b"UP"
+    g.ClearSent()
+    g.ReceivedFromProxy(5999, b"PASSTHROUGH", params)
+    data = g.SentData(1)
+    if data is None:
+        check("PASSTHROUGH UP reaches the device", "nothing sent", "key 19")
+    else:
+        msg = RemoteMessage()
+        msg.ParseFromString(data[1:])
+        check("PASSTHROUGH UP reaches the device", msg.remote_key_inject.key_code, 19)
 
 
 def main() -> None:
@@ -253,6 +338,8 @@ def main() -> None:
         check(f"{command.decode():<15} deliberately unmapped", g.SentCount(), 0)
 
     print("\npairing exchange")
+    print_miniapp_tests(lua, g)
+
     lua2 = load_driver()
     h = lua2.globals()
     h.OnDriverInit()

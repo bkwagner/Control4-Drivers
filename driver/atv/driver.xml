@@ -123,7 +123,12 @@
 		</commands>
 	</config>
 	<proxies>
-		<proxy name="Google TV">media_player</proxy>
+		<proxy proxybindingid="5001" name="Google TV" primary="True">media_player</proxy>
+		<!--
+			Dedicated switcher proxy carrying the universal mini-app inputs. Hidden in
+			every room at init so it does not appear as a device of its own.
+		-->
+		<proxy proxybindingid="5999" name="Google TV Apps">avswitch</proxy>
 	</proxies>
 	<events/>
 	<connections>
@@ -152,6 +157,324 @@
 			<classes>
 				<class>
 					<classname>HDMI</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection>
+			<id>5999</id>
+			<type>2</type>
+			<connectionname>AVSWITCH</connectionname>
+			<consumer>False</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>AVSWITCH</classname>
+				</class>
+			</classes>
+		</connection>
+		<!--
+			Universal mini-app inputs, 3101-3125. Bind an app minidriver (Netflix,
+			Jellyfin, HBO Max ...) to any of these in Composer's Connections view and
+			it will launch on this device. Kept below 3199: on TV and receiver proxies,
+			inputs above x099 do not raise events or variable changes.
+		-->
+		<connection proxybindingid="5999">
+			<id>3101</id>
+			<type>5</type>
+			<connectionname>MiniApp 1</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3102</id>
+			<type>5</type>
+			<connectionname>MiniApp 2</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3103</id>
+			<type>5</type>
+			<connectionname>MiniApp 3</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3104</id>
+			<type>5</type>
+			<connectionname>MiniApp 4</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3105</id>
+			<type>5</type>
+			<connectionname>MiniApp 5</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3106</id>
+			<type>5</type>
+			<connectionname>MiniApp 6</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3107</id>
+			<type>5</type>
+			<connectionname>MiniApp 7</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3108</id>
+			<type>5</type>
+			<connectionname>MiniApp 8</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3109</id>
+			<type>5</type>
+			<connectionname>MiniApp 9</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3110</id>
+			<type>5</type>
+			<connectionname>MiniApp 10</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3111</id>
+			<type>5</type>
+			<connectionname>MiniApp 11</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3112</id>
+			<type>5</type>
+			<connectionname>MiniApp 12</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3113</id>
+			<type>5</type>
+			<connectionname>MiniApp 13</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3114</id>
+			<type>5</type>
+			<connectionname>MiniApp 14</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3115</id>
+			<type>5</type>
+			<connectionname>MiniApp 15</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3116</id>
+			<type>5</type>
+			<connectionname>MiniApp 16</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3117</id>
+			<type>5</type>
+			<connectionname>MiniApp 17</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3118</id>
+			<type>5</type>
+			<connectionname>MiniApp 18</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3119</id>
+			<type>5</type>
+			<connectionname>MiniApp 19</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3120</id>
+			<type>5</type>
+			<connectionname>MiniApp 20</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3121</id>
+			<type>5</type>
+			<connectionname>MiniApp 21</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3122</id>
+			<type>5</type>
+			<connectionname>MiniApp 22</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3123</id>
+			<type>5</type>
+			<connectionname>MiniApp 23</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3124</id>
+			<type>5</type>
+			<connectionname>MiniApp 24</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>3125</id>
+			<type>5</type>
+			<connectionname>MiniApp 25</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
 				</class>
 			</classes>
 		</connection>

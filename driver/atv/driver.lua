@@ -37,10 +37,30 @@ local keycodes = require('lib.keycodes')
 -- Constants
 --------------------------------------------------------------------------------
 
-local BINDING_PROXY   = 5001
-local BINDING_CONTROL = 6001
-local BINDING_PAIRTLS = 6002
-local BINDING_PEEK    = 6003
+local BINDING_PROXY    = 5001
+local BINDING_SWITCHER = 5999
+local BINDING_CONTROL  = 6001
+local BINDING_PAIRTLS  = 6002
+local BINDING_PEEK     = 6003
+
+--[[
+	Universal minidriver support.
+
+	App minidrivers (Netflix, Jellyfin, HBO Max ...) publish one service ID per
+	platform and bind to one of the RF_MINI_APP inputs below. Selecting the app in
+	Navigator arrives here as SET_INPUT on the switcher proxy; the driver looks up
+	the app ID the minidriver published for our platform and launches it.
+
+	MINIAPP_TYPE is deliberately UM_NV_SHIELD. The Shield is also Android TV, so
+	its service IDs are plain Android package names - exactly what
+	RemoteAppLinkLaunchRequest accepts. That means every stock minidriver carrying
+	a Shield entry works here unmodified, with no new service ID to standardise.
+]]
+local MINIAPP_TYPE          = 'UM_NV_SHIELD'
+local MINIAPP_BINDING_START = 3101
+local MINIAPP_BINDING_END   = 3125
+
+local ROOM_SELECTED_DEVICE = 1000
 
 local PORT_CONTROL = 6466
 local PORT_PAIR    = 6467
@@ -503,15 +523,108 @@ function LaunchApp(appLink)
 end
 
 --------------------------------------------------------------------------------
+-- Universal minidriver (app launching from Navigator)
+--------------------------------------------------------------------------------
+
+--[[
+	Read the app ID a minidriver published for our platform.
+
+	Falls back to APP_ID, which is what minidrivers predating the universal scheme
+	expose. Copied from the SDK's universal minidriver template.
+]]
+local function getUniversalAppId(deviceId, source)
+	local vars = C4:GetDeviceVariables(deviceId) or {}
+	for _, var in pairs(vars) do
+		if (var.name == source) then return var.value end
+	end
+	if (source ~= 'APP_ID') then
+		return getUniversalAppId(deviceId, 'APP_ID')
+	end
+end
+
+--- Track which device each room currently has selected.
+function RegisterRooms()
+	RoomIDs = C4:GetDevicesByC4iName('roomdevice.c4i') or {}
+	RoomIDSources = {}
+	for roomId, _ in pairs(RoomIDs) do
+		RoomIDSources[roomId] = tonumber(C4:GetDeviceVariable(roomId, ROOM_SELECTED_DEVICE)) or 0
+		C4:UnregisterVariableListener(roomId, ROOM_SELECTED_DEVICE)
+		C4:RegisterVariableListener(roomId, ROOM_SELECTED_DEVICE)
+	end
+end
+
+--[[
+	The switcher proxy is an implementation detail of mini-app support; without
+	this it shows up in Navigator as a device of its own.
+]]
+local function hideSwitcherProxy()
+	local id, name = next(C4:GetBoundConsumerDevices(C4:GetDeviceID(), BINDING_SWITCHER) or {})
+	if (id == nil) then return end
+
+	for roomId, _ in pairs(C4:GetDevicesByC4iName('roomdevice.c4i') or {}) do
+		C4:SendToDevice(roomId, 'SET_DEVICE_HIDDEN_STATE',
+			{ PROXY_GROUP = 'ALL', DEVICE_ID = id, IS_HIDDEN = true })
+	end
+	dbg('hid switcher proxy (%s) in all rooms', tostring(name))
+end
+
+--[[
+	Navigator selected a mini-app. Walk the binding chain to the minidriver that
+	owns this input, read the app ID it published for us, and launch it.
+]]
+local function selectMiniApp(input)
+	if (input < MINIAPP_BINDING_START or input > MINIAPP_BINDING_END) then
+		dbg('SET_INPUT %s is not a mini-app input', tostring(input))
+		return
+	end
+
+	local proxyDeviceId = next(C4:GetBoundConsumerDevices(C4:GetDeviceID(), BINDING_SWITCHER) or {})
+	if (proxyDeviceId == nil) then
+		dbg('mini-app %d selected but the switcher proxy is not bound', input)
+		return
+	end
+
+	local appProxyId = C4:GetBoundProviderDevice(proxyDeviceId, input)
+	if (appProxyId == nil or appProxyId == 0) then
+		dbg('nothing bound to mini-app input %d', input)
+		return
+	end
+
+	local appDeviceId = C4:GetBoundProviderDevice(appProxyId, BINDING_PROXY)
+	if (appDeviceId == nil or appDeviceId == 0) then
+		dbg('mini-app proxy %s has no protocol driver behind it', tostring(appProxyId))
+		return
+	end
+
+	local appId   = getUniversalAppId(appDeviceId, MINIAPP_TYPE)
+	local appName = getUniversalAppId(appDeviceId, 'APP_NAME')
+
+	if (appId == nil or appId == '') then
+		dbg('minidriver %s publishes no %s app id (name=%s) - add one to its ' ..
+			'serviceIds table', tostring(appDeviceId), MINIAPP_TYPE, tostring(appName))
+		return
+	end
+
+	dbg('mini-app input %d -> %s (%s)', input, tostring(appName), appId)
+	LaunchApp(appId)
+end
+
+--------------------------------------------------------------------------------
 -- DriverWorks entry points
 --------------------------------------------------------------------------------
 
 function OnDriverInit()
 	Driver.controlBuf = pb.newBuffer()
+	-- OnPIP fires when the project's bindings change, so mini-app wiring and room
+	-- tracking stay current without a Director restart.
+	C4:RegisterSystemEvent(C4SystemEvents.OnPIP, 0)
 	dbg('driver init')
 end
 
 function OnDriverLateInit()
+	hideSwitcherProxy()
+	RegisterRooms()
+
 	if (loadIdentity()) then
 		setStatus('Paired - connecting')
 		Connect()
@@ -521,7 +634,23 @@ function OnDriverLateInit()
 end
 
 function OnDriverDestroyed()
+	pcall(function() C4:UnregisterSystemEvent(C4SystemEvents.OnPIP, 0) end)
 	Disconnect()
+end
+
+function OnSystemEvent(event)
+	local name = string.match(tostring(event), '.-name="(.-)"')
+	if (name == 'OnPIP') then
+		dbg('project bindings changed; re-registering rooms')
+		RegisterRooms()
+	end
+end
+
+function OnWatchedVariableChanged(idDevice, idVariable, strValue)
+	if (RoomIDs ~= nil and RoomIDs[idDevice] ~= nil
+		and idVariable == ROOM_SELECTED_DEVICE) then
+		RoomIDSources[tonumber(idDevice)] = tonumber(strValue) or 0
+	end
 end
 
 function OnConnectionStatusChanged(idBinding, nPort, strStatus)
@@ -626,6 +755,27 @@ end
 	recognise, so unexpected names are expected.
 ]]
 function ReceivedFromProxy(idBinding, strCommand, tParams)
+	tParams = tParams or {}
+
+	--[[
+		While a mini-app is the selected source, Navigator sends its key presses to
+		the minidriver, which forwards them here wrapped as PASSTHROUGH. Unwrapping
+		must happen before anything else looks at idBinding or strCommand.
+	]]
+	if (idBinding == BINDING_SWITCHER and strCommand == 'PASSTHROUGH') then
+		idBinding  = BINDING_PROXY
+		strCommand = tParams.PASSTHROUGH_COMMAND or ''
+	end
+
+	if (idBinding == BINDING_SWITCHER) then
+		if (strCommand == 'SET_INPUT') then
+			selectMiniApp(tonumber(tParams.INPUT) or 0)
+		else
+			dbg('switcher command ignored: %s', tostring(strCommand))
+		end
+		return
+	end
+
 	if (idBinding ~= BINDING_PROXY) then return end
 
 	local keyCode, direction, disposition = keymap.resolve(strCommand)

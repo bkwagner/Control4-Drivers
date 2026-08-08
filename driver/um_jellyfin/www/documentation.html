@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Jellyfin (Universal)</title>
+	<style>
+		body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; margin: 16px; color: #222; }
+		h1 { font-size: 18px; margin-bottom: 4px; }
+		h2 { font-size: 14px; margin-top: 20px; }
+		code { background: #f2f2f2; padding: 1px 4px; }
+		table { border-collapse: collapse; margin-top: 6px; }
+		td, th { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
+		.note { background: #fffbe6; border: 1px solid #e6d98a; padding: 8px; margin-top: 14px; }
+	</style>
+</head>
+<body>
+
+<h1>Jellyfin (Universal)</h1>
+<p>Universal mini-app driver for launching Jellyfin on a connected TV or streaming device.</p>
+
+<h2>How it works</h2>
+<p>
+	This driver does not launch anything by itself. It publishes a service ID for each
+	supported platform and passes commands through to the TV or streamer driver it is
+	bound to, which performs the launch using its own protocol.
+</p>
+
+<table>
+	<tr><th>Platform</th><th>Service ID</th></tr>
+	<tr><td><code>UM_SONY_TV</code></td><td><code>Jellyfin</code> &mdash; the app title as the TV reports it</td></tr>
+	<tr><td><code>UM_NV_SHIELD</code></td><td><code>org.jellyfin.androidtv</code> &mdash; the Android package name</td></tr>
+</table>
+
+<h2>Installation</h2>
+<ol>
+	<li>Add the driver to the project.</li>
+	<li>In Connections, bind its <strong>Jellyfin</strong> mini-app connection to a free
+		<code>RF_MINI_APP</code> input on the TV or streamer driver.</li>
+	<li>The app appears in Navigator for any room whose video path includes that device.</li>
+</ol>
+
+<h2>If it stops working</h2>
+<p>
+	The usual cause is the app being renamed. On Sony Bravia the service ID must match the
+	app's title exactly as the TV reports it; that is what broke the stock HBO driver when
+	&ldquo;HBO&rdquo; became &ldquo;HBO Max&rdquo;. The current list can be read from the TV:
+</p>
+<p><code>POST http://&lt;tv-ip&gt;/sony/appControl</code> with
+	<code>{"method":"getApplicationList","params":[],"version":"1.0","id":1}</code></p>
+<p>Then update <code>JSON_APP_DATA</code> at the bottom of <code>driver.lua</code> to match.</p>
+
+<div class="note">
+	<strong>Icons are placeholders.</strong> They are a plain gradient, not the Jellyfin
+	logo. To use real artwork, replace the PNGs under <code>www/icons/</code> at the same
+	paths and pixel sizes, then rebuild.
+</div>
+
+<div class="note">
+	<strong>Auto-update is off.</strong> This is not a Control4-published driver, so there
+	is nothing to update from. Leaving it off also prevents a published driver of the same
+	name from replacing it.
+</div>
+
+</body>
+</html>
