@@ -477,7 +477,10 @@ local function handleControlMessage(msg)
 			msg.level or 0, msg.max or 0, tostring(msg.muted))
 
 	elseif (msg.kind == 'error') then
-		dbg('device reported a protocol error')
+		-- The device echoes the message it rejected, which is the only useful
+		-- thing in a RemoteError.
+		dbg('device REJECTED our message: field=%s (%s) value=%s',
+			tostring(msg.field), tostring(msg.name), tostring(msg.value))
 
 	else
 		dbg('unhandled message kind=%s field=%s', tostring(msg.kind), tostring(msg.field))

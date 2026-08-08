@@ -40,6 +40,9 @@ M.FIELD = {
 	APP_LINK_LAUNCH    = 90,
 }
 
+--- Reverse map, for naming a field the device complained about.
+M.FIELD_NAME = {}
+
 --- Feature bitmask the device advertises in RemoteConfigure.code1.
 M.FEATURE = {
 	PING     = 1,
@@ -75,6 +78,10 @@ end
 function M.negotiateFeatures(offered)
 	if (offered == nil or offered == 0) then return M.DEFAULT_FEATURES end
 	return band(M.DEFAULT_FEATURES, offered)
+end
+
+for name, number in pairs(M.FIELD) do
+	M.FIELD_NAME[number] = name
 end
 
 --------------------------------------------------------------------------------
@@ -200,8 +207,26 @@ function M.parseMessage(payload)
 		}
 	end
 
-	if (pb.getString(msg, M.FIELD.ERROR) ~= nil) then
-		return { kind = 'error' }
+	--[[
+		RemoteError carries the offending message back inside it (field 2), so the
+		device tells us exactly what it rejected. Reporting only "a protocol error"
+		throws away the one useful thing in it.
+	]]
+	local errPayload = pb.getString(msg, M.FIELD.ERROR)
+	if (errPayload ~= nil) then
+		local err = pb.parse(errPayload)
+		local offending = pb.getString(err, 2)
+		local field, name
+
+		if (offending ~= nil) then
+			for f, _ in pairs(pb.parse(offending)) do
+				field = f
+				name = M.FIELD_NAME[f]
+				break
+			end
+		end
+
+		return { kind = 'error', value = pb.getBool(err, 1), field = field, name = name }
 	end
 
 	for field, _ in pairs(msg) do
