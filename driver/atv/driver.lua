@@ -628,15 +628,20 @@ end
 function ReceivedFromProxy(idBinding, strCommand, tParams)
 	if (idBinding ~= BINDING_PROXY) then return end
 
-	local keyCode, direction = keymap.resolve(strCommand)
-	if (keyCode ~= nil) then
+	local keyCode, direction, disposition = keymap.resolve(strCommand)
+
+	if (disposition == 'mapped') then
 		dbg('proxy %s -> %s dir=%s', strCommand,
 			keycodes.KEYCODE_NAME[keyCode] or keyCode, tostring(direction))
 		SendKeyCode(keyCode, direction)
-		return
-	end
 
-	dbg('proxy command not mapped: %s', tostring(strCommand))
+	elseif (disposition == 'ignored') then
+		-- Key release following a tap we already delivered in full. Expected on
+		-- every press, so it is not worth reporting as a problem.
+
+	else
+		dbg('proxy command not mapped: %s', tostring(strCommand))
+	end
 end
 
 function ExecuteCommand(strCommand, tParams)

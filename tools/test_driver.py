@@ -209,8 +209,45 @@ def main() -> None:
     g.ReceivedFromProxy(BINDING_PROXY, b"NONSENSE_COMMAND", lua.table())
     check("unmapped command sends nothing", g.SentCount(), 0)
 
+    # Observed on hardware: a tap is NAME then END_NAME. The tap is already a
+    # complete SHORT press, so the release must not produce a second key event.
+    for command in (b"END_DOWN", b"END_ENTER", b"END_MENU", b"END_CANCEL"):
+        g.ClearSent()
+        g.ReceivedFromProxy(BINDING_PROXY, command, lua.table())
+        check(f"{command.decode():<15} ignored, sends nothing", g.SentCount(), 0)
+
+    # Press-and-hold on a navigation key: START_/STOP_ are a real key down and up.
+    for command, want_key, want_dir in [(b"START_RIGHT", 22, 1), (b"STOP_RIGHT", 22, 2),
+                                        (b"START_DOWN", 20, 1), (b"STOP_DOWN", 20, 2)]:
+        g.ClearSent()
+        g.ReceivedFromProxy(BINDING_PROXY, command, lua.table())
+        data = g.SentData(1)
+        if data is None:
+            check(f"{command.decode()} sent", "nothing", f"key {want_key}")
+            continue
+        msg = RemoteMessage()
+        msg.ParseFromString(data[1:])
+        check(f"{command.decode():<15} -> key {want_key} dir {want_dir}",
+              (msg.remote_key_inject.key_code, msg.remote_key_inject.direction),
+              (want_key, want_dir))
+
+    # Room selection should wake the streamer, not toggle power (CEC would reach
+    # the TV, which Control4 already controls).
+    for command, want_key in [(b"ON", 224), (b"SELECT_SOURCE", 224),
+                              (b"OFF", 223), (b"ROOM_OFF", 223)]:
+        g.ClearSent()
+        g.ReceivedFromProxy(BINDING_PROXY, command, lua.table())
+        data = g.SentData(1)
+        if data is None:
+            check(f"{command.decode()} sent", "nothing", f"key {want_key}")
+            continue
+        msg = RemoteMessage()
+        msg.ParseFromString(data[1:])
+        check(f"{command.decode():<15} -> key {want_key}",
+              msg.remote_key_inject.key_code, want_key)
+
     # Volume must not be mapped - Control4 owns it over CEC.
-    for command in (b"START_VOL_UP", b"MUTE_TOGGLE", b"STOP_VOL_DOWN"):
+    for command in (b"START_VOL_UP", b"MUTE_TOGGLE", b"STOP_VOL_DOWN", b"END_VOL_UP"):
         g.ClearSent()
         g.ReceivedFromProxy(BINDING_PROXY, command, lua.table())
         check(f"{command.decode():<15} deliberately unmapped", g.SentCount(), 0)

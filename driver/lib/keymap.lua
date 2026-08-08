@@ -86,7 +86,20 @@ M.COMMANDS = {
 	PROGRAM_C         = { key = K.KEYCODE_PROG_YELLOW },
 	PROGRAM_D         = { key = K.KEYCODE_PROG_BLUE },
 
-	-- Misc
+	-- Room selection and power.
+	--
+	-- ON / SELECT_SOURCE arrive when the device is picked as a room's source, and
+	-- OFF / ROOM_OFF when the room shuts down. These use WAKEUP and SLEEP rather
+	-- than KEYCODE_POWER deliberately: POWER toggles, and on this hardware it can
+	-- propagate to the TV over CEC, which Control4 is already controlling. WAKEUP
+	-- and SLEEP affect only the streamer.
+	ON                = { key = K.KEYCODE_WAKEUP },
+	SELECT_SOURCE     = { key = K.KEYCODE_WAKEUP },
+	OFF               = { key = K.KEYCODE_SLEEP },
+	ROOM_OFF          = { key = K.KEYCODE_SLEEP },
+
+	-- Misc. POWER stays a real toggle: pressing it is explicit user intent, unlike
+	-- the room-driven commands above.
 	POWER             = { key = K.KEYCODE_POWER },
 	CLOSED_CAPTIONED  = { key = K.KEYCODE_CAPTIONS },
 	RECALL            = { key = K.KEYCODE_BACK },
@@ -101,22 +114,54 @@ M.COMMANDS = {
 --[[
 	Resolve a proxy command to key code and direction.
 
-	Returns keyCode, direction - or nil if the command is not mapped, which is a
-	normal outcome the caller should log rather than treat as an error.
+	Returns keyCode, direction, disposition where disposition is one of:
+	  'mapped'    act on it
+	  'ignored'   recognised, deliberately does nothing
+	  'unmapped'  unknown; worth logging
+
+	Observed on hardware, the media_player proxy wraps navigation keys in prefixes
+	that are not in the documented command list:
+
+	  tap        RIGHT, then END_RIGHT
+	  press-hold RIGHT, then START_RIGHT ... STOP_RIGHT
+
+	So a bare name is a complete tap and is sent as SHORT. START_/STOP_ are a real
+	key down and up, which is what gives hold-to-repeat on the device. END_ is the
+	release of a tap we have already delivered in full, so it is dropped - acting
+	on it would send a second, spurious key event.
 ]]
 function M.resolve(command)
-	local entry = M.COMMANDS[command]
-	if (entry == nil) then return nil, nil end
+	if (command == nil) then return nil, nil, 'unmapped' end
 
-	if (entry.hold) then
-		-- START_x begins the hold, STOP_x ends it.
-		if (string.sub(command, 1, 6) == 'START_') then
-			return entry.key, D.START_LONG
+	-- Exact matches win, so the explicit START_SCAN_FWD family above still applies.
+	local entry = M.COMMANDS[command]
+	if (entry ~= nil) then
+		if (entry.hold) then
+			if (string.sub(command, 1, 6) == 'START_') then
+				return entry.key, D.START_LONG, 'mapped'
+			end
+			return entry.key, D.END_LONG, 'mapped'
 		end
-		return entry.key, D.END_LONG
+		return entry.key, D.SHORT, 'mapped'
 	end
 
-	return entry.key, D.SHORT
+	-- END_<KEY>: the tap was already delivered as a complete SHORT press.
+	local base = string.match(command, '^END_(.+)$')
+	if (base ~= nil and M.COMMANDS[base] ~= nil) then
+		return nil, nil, 'ignored'
+	end
+
+	base = string.match(command, '^START_(.+)$')
+	if (base ~= nil and M.COMMANDS[base] ~= nil) then
+		return M.COMMANDS[base].key, D.START_LONG, 'mapped'
+	end
+
+	base = string.match(command, '^STOP_(.+)$')
+	if (base ~= nil and M.COMMANDS[base] ~= nil) then
+		return M.COMMANDS[base].key, D.END_LONG, 'mapped'
+	end
+
+	return nil, nil, 'unmapped'
 end
 
 --- Names of every mapped command, for logging and diagnostics.
