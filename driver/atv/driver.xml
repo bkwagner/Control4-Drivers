@@ -200,6 +200,38 @@
 			</classes>
 		</connection>
 		<!--
+			Inputs on the main proxy for the switcher's outputs to bind to. The SDK
+			template is explicit that the switcher's AV out connects to the "main"
+			proxy rather than to the display: the path runs
+			minidriver -> switcher input -> switcher out -> here -> HDMI OUT -> TV.
+			Without these the switcher output has nowhere to go and mini-apps never
+			reach a room.
+		-->
+		<connection proxybindingid="5001">
+			<id>1001</id>
+			<type>5</type>
+			<connectionname>App Switch Video In</connectionname>
+			<consumer>True</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>HDMI</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3001</id>
+			<type>6</type>
+			<connectionname>App Switch Audio In</connectionname>
+			<consumer>True</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>STEREO</classname>
+				</class>
+			</classes>
+		</connection>
+		<!--
 			AV outputs for the switcher proxy. Without these the switcher is not in
 			any room's AV path, and mini-apps bound to it never appear in a room -
 			they have no route to the display. The SDK template uses COMPONENT here;
@@ -214,6 +246,7 @@
 			<classes>
 				<class>
 					<classname>HDMI</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
@@ -226,6 +259,7 @@
 			<classes>
 				<class>
 					<classname>STEREO</classname>
+					<autobind>true</autobind>
 				</class>
 			</classes>
 		</connection>
