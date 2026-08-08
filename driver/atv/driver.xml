@@ -200,6 +200,36 @@
 			</classes>
 		</connection>
 		<!--
+			AV outputs for the switcher proxy. Without these the switcher is not in
+			any room's AV path, and mini-apps bound to it never appear in a room -
+			they have no route to the display. The SDK template uses COMPONENT here;
+			HDMI is used instead because that is what this device actually has.
+		-->
+		<connection proxybindingid="5999">
+			<id>2110</id>
+			<type>5</type>
+			<connectionname>App Switch Video Out</connectionname>
+			<consumer>False</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>HDMI</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5999">
+			<id>4110</id>
+			<type>6</type>
+			<connectionname>App Switch Audio Out</connectionname>
+			<consumer>False</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>STEREO</classname>
+				</class>
+			</classes>
+		</connection>
+		<!--
 			Universal mini-app inputs, 3101-3125. Bind an app minidriver (Netflix,
 			Jellyfin, HBO Max ...) to any of these in Composer's Connections view and
 			it will launch on this device. Kept below 3199: on TV and receiver proxies,
