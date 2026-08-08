@@ -22,10 +22,10 @@ Full background, prior art, and milestones: [docs/BRIEF.md](docs/BRIEF.md).
 | `tools/build_c4z.py` | Packages a driver dir into an unencrypted `.c4z` |
 | `certs/` | Paired identities, one per device. **Gitignored — back these up.** |
 
-Build a driver, then test the protocol layer:
+Build a driver, then run the full test suite:
 
 ```bash
-python tools/build_c4z.py driver/atv_spike && python tools/test_protocol.py
+python tools/build_c4z.py driver/atv_spike && python tools/test_protocol.py && python tools/test_pairing.py && python tools/test_tls_peek.py
 ```
 
 `driver/lib/` is bundled as `lib/` in the archive, so driver code uses
