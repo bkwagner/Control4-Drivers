@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+"""Exercise driver/atv/driver.lua without a controller.
+
+Stubs the DriverWorks C4 API and a minimal lua-openssl, loads the real driver,
+and drives it through a control session and a pairing exchange - asserting on the
+bytes it puts on the wire and the properties it sets.
+
+This catches wiring mistakes (wrong binding, missing ping reply, unmapped key)
+that would otherwise cost a Composer round trip each. It does NOT replace testing
+on hardware: the stubs are not Director, and lua-openssl is not exercised.
+
+    python tools/test_driver.py
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+try:
+    import lupa
+except ImportError:
+    sys.exit("error: pip install lupa")
+
+try:
+    from androidtvremote2.polo_pb2 import OuterMessage
+    from androidtvremote2.remotemessage_pb2 import RemoteMessage
+except ImportError:
+    sys.exit("error: pip install -r tools/requirements.txt")
+
+REPO = Path(__file__).resolve().parent.parent
+DRIVER = REPO / "driver"
+
+failures: list[str] = []
+checks = 0
+
+BINDING_CONTROL, PORT_CONTROL = 6001, 6466
+BINDING_PROXY = 5001
+
+
+def check(label: str, got, want) -> None:
+    global checks
+    checks += 1
+    if got == want:
+        print(f"  ok   {label}")
+    else:
+        print(f"  FAIL {label}")
+        print(f"       got  {got!r}")
+        print(f"       want {want!r}")
+        failures.append(label)
+
+
+LUA_STUBS = rb"""
+-- Captures everything the driver sends, plus property writes.
+Sent = {}
+Props = {}
+Calls = {}
+
+Properties = {
+    ['Device IP'] = '10.0.0.1',
+    ['Client Name'] = 'Control4',
+    ['Pairing Code'] = '',
+    ['Debug Mode'] = 'Off',
+}
+
+local function record(name, ...)
+    table.insert(Calls, { name = name, args = { ... } })
+end
+
+C4 = {}
+function C4:UpdateProperty(name, value)
+    Props[name] = value
+    Properties[name] = value
+end
+function C4:SendToNetwork(binding, port, data)
+    table.insert(Sent, { binding = binding, port = port, data = data })
+end
+function C4:PersistGetValue(name) return Persisted and Persisted[name] or nil end
+function C4:PersistSetValue(name, value)
+    Persisted = Persisted or {}
+    Persisted[name] = value
+end
+function C4:PersistDeleteValue(name)
+    if (Persisted) then Persisted[name] = nil end
+end
+function C4:CreateNetworkConnection(...) record('CreateNetworkConnection', ...) end
+function C4:NetPortOptions(...)          record('NetPortOptions', ...) end
+function C4:NetConnect(...)              record('NetConnect', ...) end
+function C4:NetDisconnect(...)           record('NetDisconnect', ...) end
+function C4:AddTimer(...)                record('AddTimer', ...) return 1 end
+function C4:KillTimer(...)               record('KillTimer', ...) return nil end
+function C4:ErrorLog(...)                record('ErrorLog', ...) end
+
+-- Minimal lua-openssl. Only the calls the driver makes on paths under test.
+package.preload['openssl'] = function()
+    local bio = {}
+    function bio.file(path, mode)
+        return { write = function() end, close = function() end }
+    end
+    return {
+        bio = bio,
+        random = function(n) return string.rep('\170', n) end,
+        digest = { digest = function(alg, data, raw) return string.rep('\1', 32) end },
+    }
+end
+
+function ClearSent() Sent = {} end
+function SentCount() return #Sent end
+function SentData(i) return Sent[i] and Sent[i].data or nil end
+function SentBinding(i) return Sent[i] and Sent[i].binding or nil end
+function Prop(name) return Props[name] end
+function SetPaired(cert, key)
+    Persisted = { client_cert_pem = cert, client_key_pem = key }
+end
+"""
+
+
+def framed(msg) -> bytes:
+    body = msg.SerializeToString()
+    out, n = bytearray(), len(body)
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        out.append(b | 0x80 if n else b)
+        if not n:
+            break
+    return bytes(out) + body
+
+
+def load_driver():
+    lua = lupa.LuaRuntime(encoding=None)
+    lua.execute(f'package.path = [[{DRIVER.as_posix()}/?.lua]] .. ";" .. package.path'.encode())
+    lua.execute(LUA_STUBS)
+    lua.execute((DRIVER / "atv" / "driver.lua").read_bytes())
+    return lua
+
+
+def main() -> None:
+    lua = load_driver()
+    g = lua.globals()
+
+    print("control session")
+    g.OnDriverInit()
+    g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"ONLINE")
+    g.ClearSent()
+
+    # Device configures us; the driver must answer with its own RemoteConfigure.
+    m = RemoteMessage()
+    m.remote_configure.code1 = 622
+    m.remote_configure.device_info.model = "Chromecast"
+    m.remote_configure.device_info.vendor = "Google"
+    g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
+    check("replies to RemoteConfigure", g.SentCount(), 1)
+    reply = RemoteMessage()
+    reply.ParseFromString(g.SentData(1)[1:])
+    check("reply is a remote_configure", reply.HasField("remote_configure"), True)
+    check("reply carries package name",
+          reply.remote_configure.device_info.package_name, "atvremote")
+
+    # Ping must be answered or the device hangs up.
+    g.ClearSent()
+    m = RemoteMessage()
+    m.remote_ping_request.val1 = 4242
+    g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
+    reply = RemoteMessage()
+    reply.ParseFromString(g.SentData(1)[1:])
+    check("answers ping", reply.HasField("remote_ping_response"), True)
+    check("echoes ping val1", reply.remote_ping_response.val1, 4242)
+
+    # State reporting.
+    m = RemoteMessage()
+    m.remote_ime_key_inject.app_info.app_package = "com.netflix.ninja"
+    g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
+    check("updates Current App", g.Prop(b"Current App"), b"com.netflix.ninja")
+
+    m = RemoteMessage()
+    m.remote_start.started = True
+    g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
+    check("updates Power State", g.Prop(b"Power State"), b"On")
+
+    # Two messages arriving in one TCP read must both be handled.
+    g.ClearSent()
+    a, b = RemoteMessage(), RemoteMessage()
+    a.remote_ping_request.val1 = 1
+    b.remote_ping_request.val1 = 2
+    g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(a) + framed(b))
+    check("handles two messages in one read", g.SentCount(), 2)
+
+    print("\nproxy commands")
+    cases = [(b"UP", 19, 3), (b"ENTER", 23, 3), (b"CANCEL", 4, 3),
+             (b"NUMBER_7", 14, 3), (b"PROGRAM_C", 185, 3),
+             (b"START_SCAN_FWD", 90, 1), (b"STOP_SCAN_FWD", 90, 2)]
+    for command, want_key, want_dir in cases:
+        g.ClearSent()
+        g.ReceivedFromProxy(BINDING_PROXY, command, lua.table())
+        data = g.SentData(1)
+        if data is None:
+            check(f"{command.decode()} sent", "nothing", f"key {want_key}")
+            continue
+        msg = RemoteMessage()
+        msg.ParseFromString(data[1:])
+        check(f"{command.decode():<15} -> key {want_key} dir {want_dir}",
+              (msg.remote_key_inject.key_code, msg.remote_key_inject.direction),
+              (want_key, want_dir))
+
+    g.ClearSent()
+    g.ReceivedFromProxy(BINDING_PROXY, b"NONSENSE_COMMAND", lua.table())
+    check("unmapped command sends nothing", g.SentCount(), 0)
+
+    # Volume must not be mapped - Control4 owns it over CEC.
+    for command in (b"START_VOL_UP", b"MUTE_TOGGLE", b"STOP_VOL_DOWN"):
+        g.ClearSent()
+        g.ReceivedFromProxy(BINDING_PROXY, command, lua.table())
+        check(f"{command.decode():<15} deliberately unmapped", g.SentCount(), 0)
+
+    print("\npairing exchange")
+    lua2 = load_driver()
+    h = lua2.globals()
+    h.OnDriverInit()
+    # Jump straight to the polo exchange; cert harvesting needs a real socket.
+    h.Driver.pairStage = b"exchange"
+    h.Driver.pairBuf = lua2.eval(b"(function() return (require('lib.protobuf')) end)()").newBuffer()
+    h.ClearSent()
+
+    def polo(**kw):
+        msg = OuterMessage()
+        msg.protocol_version = 2
+        msg.status = OuterMessage.Status.STATUS_OK
+        for field, value in kw.items():
+            getattr(msg, field).SetInParent()
+            if field == "secret_ack":
+                msg.secret_ack.secret = bytes(range(32))
+        return framed(msg)
+
+    h.ReceivedFromNetwork(6002, 6467, polo(pairing_request_ack=True))
+    sent = OuterMessage()
+    sent.ParseFromString(h.SentData(1)[1:])
+    check("request_ack -> options", sent.HasField("options"), True)
+    check("options requests hex encoding",
+          sent.options.input_encodings[0].symbol_length, 6)
+
+    h.ClearSent()
+    h.ReceivedFromNetwork(6002, 6467, polo(options=True))
+    sent = OuterMessage()
+    sent.ParseFromString(h.SentData(1)[1:])
+    check("options -> configuration", sent.HasField("configuration"), True)
+
+    h.ClearSent()
+    h.ReceivedFromNetwork(6002, 6467, polo(configuration_ack=True))
+    check("configuration_ack -> awaits code", h.Driver.pairStage, b"awaiting_code")
+    check("prompts for the code", b"Pairing Code" in (h.Prop(b"Status") or b""), True)
+
+    # A non-OK status must abort rather than continue.
+    lua3 = load_driver()
+    k = lua3.globals()
+    k.OnDriverInit()
+    k.Driver.pairStage = b"exchange"
+    k.Driver.pairBuf = lua3.eval(b"(function() return (require('lib.protobuf')) end)()").newBuffer()
+    bad = OuterMessage()
+    bad.protocol_version = 2
+    bad.status = OuterMessage.Status.STATUS_BAD_SECRET
+    bad.secret_ack.secret = bytes(range(32))
+    k.ReceivedFromNetwork(6002, 6467, framed(bad))
+    check("non-OK status aborts pairing", k.Driver.pairStage, None)
+    check("reports rejection", b"rejected" in (k.Prop(b"Status") or b""), True)
+
+    print()
+    if failures:
+        print(f"{len(failures)}/{checks} FAILED:")
+        for f in failures:
+            print(f"  - {f}")
+        sys.exit(1)
+    print(f"all {checks} checks passed")
+
+
+if __name__ == "__main__":
+    main()

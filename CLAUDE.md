@@ -12,6 +12,7 @@ Full background, prior art, and milestones: [docs/BRIEF.md](docs/BRIEF.md).
 | `docs/BRIEF.md` | Original project brief — protocol background, prior art, milestones |
 | `docs/spike-01-findings.md` | Capability research + the pending go/no-go test |
 | `spikes/01_openssl_capability.lua` | Paste-into-Composer-Lua-window probe, no install needed |
+| `driver/atv/` | **The driver.** `media_player` proxy, pairing, full keymap |
 | `driver/atv_spike/` | Minimal `.c4z` that tests the mTLS handshake |
 | `driver/lib/` | Shared Lua modules, bundled into every `.c4z` under `lib/` |
 | `docs/protocol-reference.md` | Generated schema reference — field numbers, framing |
@@ -22,11 +23,16 @@ Full background, prior art, and milestones: [docs/BRIEF.md](docs/BRIEF.md).
 | `tools/build_c4z.py` | Packages a driver dir into an unencrypted `.c4z` |
 | `certs/` | Paired identities, one per device. **Gitignored — back these up.** |
 
-Build a driver, then run the full test suite:
+Build the driver, then run the full test suite (97 checks):
 
 ```bash
-python tools/build_c4z.py driver/atv_spike && python tools/test_protocol.py && python tools/test_pairing.py && python tools/test_tls_peek.py
+python tools/build_c4z.py driver/atv && for t in protocol pairing tls_peek driver; do python tools/test_$t.py || break; done
 ```
+
+`tools/test_driver.py` stubs the DriverWorks C4 API and loads the real `driver.lua`,
+so the state machine, keymap and pairing exchange are exercised off-device. It does
+not replace hardware testing — the stubs are not Director, and lua-openssl is not
+exercised by it.
 
 `driver/lib/` is bundled as `lib/` in the archive, so driver code uses
 `require('lib.protobuf')` — DriverWorks maps dots to directories from the c4z root.
