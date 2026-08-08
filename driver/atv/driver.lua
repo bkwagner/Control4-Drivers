@@ -62,7 +62,6 @@ local RECONNECT_DELAY = 15
 Driver = {
 	certPem      = nil,
 	keyPem       = nil,
-	clientKey    = nil,     -- lua-openssl pkey, held only during pairing
 	serverNumbers = nil,    -- { modulus, exponent } harvested from the device
 	peekSession  = nil,
 	controlBuf   = nil,
@@ -167,7 +166,7 @@ local function generateIdentity()
 		})
 		local req  = openssl.x509.req.new(subject, key)
 		local cert = req:to_x509(key, 3650, 'sha256')
-		return { key = key, certPem = cert:export('pem'), keyPem = key:export('pem') }
+		return { certPem = cert:export('pem'), keyPem = key:export('pem') }
 	end)
 
 	if (not ok or result == nil) then
@@ -315,7 +314,6 @@ function PairStart()
 		return
 	end
 
-	Driver.clientKey = identity.key
 	Driver.certPem   = identity.certPem
 	Driver.keyPem    = identity.keyPem
 
@@ -351,25 +349,22 @@ local function pairConnectTls()
 	setStatus('Pairing: connecting to pairing service')
 end
 
---- Extract the harvested certificate's modulus and exponent.
+--[[
+	Extract the harvested certificate's modulus and exponent.
+
+	Read directly out of the DER rather than via lua-openssl - see the note in
+	lib/pairing.lua. This path is covered by tools/test_der.py against the live
+	device certificate.
+]]
 local function adoptServerCertificate(der)
-	local openssl = require('openssl')
-
-	local ok, numbers = pcall(function()
-		local cert = openssl.x509.read(der, 'der')
-		local key = cert:pubkey()
-		local modulus, exponent, how = pairing.publicNumbers(key)
-		return { modulus = modulus, exponent = exponent, how = how }
-	end)
-
-	if (not ok or numbers == nil or numbers.modulus == nil) then
-		return false, 'could not read server public key: ' ..
-			tostring(numbers and numbers.how or numbers)
+	local modulus, exponent, status = pairing.publicNumbersFromCertificate(der)
+	if (modulus == nil) then
+		return false, 'could not read server public key: ' .. tostring(status)
 	end
 
-	dbg('server public key via %s: modulus %d bytes, exponent %d bytes',
-		tostring(numbers.how), #numbers.modulus, #numbers.exponent)
-	Driver.serverNumbers = numbers
+	dbg('server public key: modulus %d bytes, exponent %d bytes',
+		#modulus, #exponent)
+	Driver.serverNumbers = { modulus = modulus, exponent = exponent }
 	return true
 end
 
@@ -387,9 +382,17 @@ function SubmitPairingCode(code)
 	end
 
 	local openssl = require('openssl')
-	local clientModulus, clientExponent, how = pairing.publicNumbers(Driver.clientKey)
+
+	-- Our own public key comes from the certificate we just generated, read the
+	-- same way as the device's.
+	local clientModulus, clientExponent, status = pairing.publicNumbersFromPem(Driver.certPem)
 	if (clientModulus == nil) then
-		setStatus('Pairing failed: could not read our own public key (%s)', tostring(how))
+		setStatus('Pairing failed: could not read our own public key (%s)', tostring(status))
+		return
+	end
+
+	if (Driver.serverNumbers == nil) then
+		setStatus('Pairing failed: no device public key - run Pair with Device again')
 		return
 	end
 
@@ -437,7 +440,6 @@ local function handlePairMessage(msg)
 	elseif (msg.kind == 'secret_ack') then
 		storeIdentity(Driver.certPem, Driver.keyPem)
 		Driver.pairStage = nil
-		Driver.clientKey = nil
 		Driver.serverNumbers = nil
 		pcall(function() C4:NetDisconnect(BINDING_PAIRTLS, PORT_PAIR) end)
 		setStatus('Paired. Connecting.')

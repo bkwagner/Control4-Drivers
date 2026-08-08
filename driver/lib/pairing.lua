@@ -229,39 +229,20 @@ end
 --------------------------------------------------------------------------------
 
 --[[
-	Extract modulus and exponent as raw big-endian byte strings.
+	Public key components come from lib/der, read straight out of the X.509
+	certificates, NOT from lua-openssl's pkey:parse().
 
-	`key` is a lua-openssl pkey. The shape of pkey:parse() varies between
-	lua-openssl versions, so several layouts are tried; the working one is
-	reported so it can be pinned in the docs once observed on hardware.
+	pkey:parse() was tried first and does not work here: its return shape varies
+	between lua-openssl versions, and the DriverWorks build (0.8.5, with the rsa
+	module removed) exposes no reachable modulus or exponent. Reading the
+	certificate is version-independent and testable off-device - see
+	tools/test_der.py, which checks it against openssl including the live device
+	certificate.
 
-	Returns modulus, exponent, description - or nil, nil, error.
+	Both halves are available as certificates: the device's is harvested by
+	lib/tls_peek, and ours is the one the driver generated.
 ]]
-function M.publicNumbers(key)
-	local ok, parsed = pcall(function() return key:parse() end)
-	if (not ok or parsed == nil) then
-		return nil, nil, 'pkey:parse() failed: ' .. tostring(parsed)
-	end
-
-	-- Some versions nest the RSA components under .rsa, others hoist them.
-	local candidates = {
-		{ desc = 'parse().rsa', t = parsed.rsa },
-		{ desc = 'parse()',     t = parsed },
-	}
-
-	for _, candidate in ipairs(candidates) do
-		local t = candidate.t
-		if (type(t) == 'table' and t.n ~= nil and t.e ~= nil) then
-			-- bn -> raw big-endian bytes. totext() is BN_bn2bin in lua-openssl.
-			local okN, n = pcall(function() return t.n:totext() end)
-			local okE, e = pcall(function() return t.e:totext() end)
-			if (okN and okE and n ~= nil and e ~= nil) then
-				return n, e, candidate.desc .. ' + bn:totext()'
-			end
-		end
-	end
-
-	return nil, nil, 'could not locate RSA modulus/exponent in pkey:parse() output'
-end
+M.publicNumbersFromCertificate = require('lib.der').rsaPublicKeyFromCertificate
+M.publicNumbersFromPem         = require('lib.der').rsaPublicKeyFromPem
 
 return M
