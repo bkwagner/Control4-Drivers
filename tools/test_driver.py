@@ -155,7 +155,7 @@ function C4:SendToDevice(...) record('SendToDevice', ...) end
 --   app proxy 5001      -> app protocol driver 400, which publishes the vars
 MiniApp = { switcher = 200, byInput = {}, vars = {} }
 function C4:GetBoundConsumerDevices(deviceId, binding)
-    if (binding == 5999 and MiniApp.switcher) then
+    if ((binding == 5999 or binding == 5001) and MiniApp.switcher) then
         return { [MiniApp.switcher] = 'Google TV Apps' }
     end
     return {}
@@ -234,7 +234,7 @@ def print_miniapp_tests(lua, g) -> None:
         params = lua.table()
         params[b"INPUT"] = value
         g.ClearSent()
-        g.ReceivedFromProxy(5999, b"SET_INPUT", params)
+        g.ReceivedFromProxy(5001, b"SET_INPUT", params)
 
     for input_id, want in [(3101, b"org.jellyfin.androidtv"), (3102, b"com.wbd.stream")]:
         set_input(input_id)
@@ -258,7 +258,7 @@ def print_miniapp_tests(lua, g) -> None:
     params = lua.table()
     params[b"PASSTHROUGH_COMMAND"] = b"UP"
     g.ClearSent()
-    g.ReceivedFromProxy(5999, b"PASSTHROUGH", params)
+    g.ReceivedFromProxy(5001, b"PASSTHROUGH", params)
     data = g.SentData(1)
     if data is None:
         check("PASSTHROUGH UP reaches the device", "nothing sent", "key 19")

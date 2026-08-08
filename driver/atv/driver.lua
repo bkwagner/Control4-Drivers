@@ -38,7 +38,7 @@ local keycodes = require('lib.keycodes')
 --------------------------------------------------------------------------------
 
 local BINDING_PROXY    = 5001
-local BINDING_SWITCHER = 5999
+local BINDING_SWITCHER = 5001  -- same as BINDING_PROXY: mini-apps live on the main proxy
 local BINDING_CONTROL  = 6001
 local BINDING_PAIRTLS  = 6002
 local BINDING_PEEK     = 6003
@@ -770,6 +770,10 @@ end
 	this it shows up in Navigator as a device of its own.
 ]]
 local function hideSwitcherProxy()
+	-- Only meaningful with a dedicated switcher. When the mini-app inputs live on
+	-- the main proxy, hiding it would hide the device itself.
+	if (BINDING_SWITCHER == BINDING_PROXY) then return end
+
 	local id, name = next(C4:GetBoundConsumerDevices(C4:GetDeviceID(), BINDING_SWITCHER) or {})
 	if (id == nil) then return end
 
@@ -970,23 +974,20 @@ function ReceivedFromProxy(idBinding, strCommand, tParams)
 	--[[
 		While a mini-app is the selected source, Navigator sends its key presses to
 		the minidriver, which forwards them here wrapped as PASSTHROUGH. Unwrapping
-		must happen before anything else looks at idBinding or strCommand.
+		must happen before anything else looks at the command.
 	]]
-	if (idBinding == BINDING_SWITCHER and strCommand == 'PASSTHROUGH') then
-		idBinding  = BINDING_PROXY
+	if (strCommand == 'PASSTHROUGH') then
 		strCommand = tParams.PASSTHROUGH_COMMAND or ''
 	end
 
-	if (idBinding == BINDING_SWITCHER) then
-		if (strCommand == 'SET_INPUT') then
-			selectMiniApp(tonumber(tParams.INPUT) or 0)
-		else
-			dbg('switcher command ignored: %s', tostring(strCommand))
-		end
+	if (idBinding ~= BINDING_PROXY and idBinding ~= BINDING_SWITCHER) then return end
+
+	-- Selecting a mini-app in Navigator. Ordered before the keymap so it still
+	-- works whether the mini-app inputs sit on this proxy or a separate switcher.
+	if (strCommand == 'SET_INPUT') then
+		selectMiniApp(tonumber(tParams.INPUT) or 0)
 		return
 	end
-
-	if (idBinding ~= BINDING_PROXY) then return end
 
 	local keyCode, direction, disposition = keymap.resolve(strCommand)
 
@@ -1096,8 +1097,6 @@ function Diagnostics()
 	dbg('  --- AV path ---')
 	reportBinding('HDMI OUT (2001)', 2001)
 	reportBinding('AUDIO OUT (4001)', 4001)
-	reportBinding('switcher out (2110)', 2110)
-	reportBinding('media_player in (1010)', 1010)
 
 	local switcherId, switcherName = next(
 		C4:GetBoundConsumerDevices(C4:GetDeviceID(), BINDING_SWITCHER) or {})

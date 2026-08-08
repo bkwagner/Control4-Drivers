@@ -150,21 +150,24 @@
 		</commands>
 	</config>
 	<proxies>
-		<proxy proxybindingid="5001" name="Google TV" primary="True">media_player</proxy>
 		<!--
-			The switcher carries the mini-app inputs and feeds its output into the
-			media_player above, which owns the single external AV output.
+			One proxy, everything on it - the same shape the Sony Bravia driver uses,
+			with the mini-app inputs on the main proxy rather than a level down.
 
-			This is the hub pattern the shipping Roku driver uses, with the
-			media_player as the hub rather than a third media_service proxy. The
-			external output stays on the Google TV itself: that is the device
-			physically plugged into the TV, it is the connection an installer expects
-			to find there, and the media_player needs a path to the display of its
-			own or it stops being a room source.
+			A dedicated avswitch was tried first, following the SDK template and the
+			Roku driver. It needs an internal AV hop from the switcher into this
+			proxy, and that hop cannot be wired reliably: autobind does not fire
+			(plain HDMI links, and a project full of HDMI inputs gives Composer no
+			unambiguous partner), and marking it hidden takes it out of Composer
+			entirely, leaving the switcher orphaned with no way to bind it.
 
-			Hidden in every room at init so it is not selectable as a device itself.
+			The template only requires the extra proxy when the main proxy does not
+			receive SET_INPUT. Whether a media_player does is unverified - if it does
+			not, SET_INPUT simply never arrives and the driver logs it as an
+			unhandled proxy command, which is a clear signal rather than a silent
+			failure.
 		-->
-		<proxy proxybindingid="5999" name="Google TV Apps">avswitch</proxy>
+		<proxy proxybindingid="5001" name="Google TV" primary="True">media_player</proxy>
 	</proxies>
 	<events/>
 	<connections>
@@ -184,23 +187,8 @@
 			</classes>
 			<hidden>True</hidden>
 		</connection>
-		<connection>
-			<id>5999</id>
-			<type>2</type>
-			<connectionname>AVSWITCH</connectionname>
-			<consumer>False</consumer>
-			<linelevel>True</linelevel>
-			<classes>
-				<class>
-					<classname>AVSWITCH</classname>
-				</class>
-			</classes>
-		</connection>
 
-		<!--
-			The connections the installer binds: the device is physically plugged in
-			here, so these live on the Google TV proxy where they are expected.
-		-->
+		<!-- The device is physically plugged in here. -->
 		<connection proxybindingid="5001">
 			<id>2001</id>
 			<type>5</type>
@@ -227,79 +215,14 @@
 		</connection>
 
 		<!--
-			Internal hop: the switcher feeds the media_player.
+			Universal mini-app inputs, on this proxy directly. Bind an app minidriver
+			(Netflix, Jellyfin, HBO Max ...) to any of these and it will launch here.
 
-			These are deliberately NOT hidden. autobind was tried and does not fire
-			on real hardware: they are plain HDMI and STEREO links, and a project
-			full of HDMI inputs gives Composer no unambiguous partner to choose.
-			Hidden connections do not appear in Composer at all, so when autobind
-			declined there was no way to bind them - the switcher was simply orphaned
-			with no diagnostic. Visible and bound by hand is worse to look at and
-			works.
+			Deliberately not autobind: the Sony TV also hosts mini-apps, and autobind
+			grabs every minidriver in the project including ones already assigned to
+			it. Which app launches where is the installer's decision.
 		-->
-		<connection proxybindingid="5999">
-			<id>2110</id>
-			<type>5</type>
-			<connectionname>App Switch Video Out</connectionname>
-			<consumer>False</consumer>
-			<linelevel>True</linelevel>
-			<classes>
-				<class>
-					<classname>HDMI</classname>
-					<autobind>true</autobind>
-				</class>
-			</classes>
-		</connection>
-		<connection proxybindingid="5999">
-			<id>4110</id>
-			<type>6</type>
-			<connectionname>App Switch Audio Out</connectionname>
-			<consumer>False</consumer>
-			<linelevel>True</linelevel>
-			<classes>
-				<class>
-					<classname>STEREO</classname>
-					<autobind>true</autobind>
-				</class>
-			</classes>
-		</connection>
 		<connection proxybindingid="5001">
-			<id>1010</id>
-			<type>5</type>
-			<connectionname>Video In from App Switch</connectionname>
-			<consumer>True</consumer>
-			<linelevel>True</linelevel>
-			<classes>
-				<class>
-					<classname>HDMI</classname>
-					<autobind>true</autobind>
-				</class>
-			</classes>
-		</connection>
-		<connection proxybindingid="5001">
-			<id>3010</id>
-			<type>6</type>
-			<connectionname>Audio In from App Switch</connectionname>
-			<consumer>True</consumer>
-			<linelevel>True</linelevel>
-			<classes>
-				<class>
-					<classname>STEREO</classname>
-					<autobind>true</autobind>
-				</class>
-			</classes>
-		</connection>
-
-		<!--
-			Universal mini-app inputs. Bind an app minidriver (Netflix, Jellyfin,
-			HBO Max ...) to any of these and it will launch on this device.
-
-			Deliberately NOT autobind, unlike the Roku driver. Roku can assume it is
-			the only device hosting mini-apps; here the Sony TV hosts them too, and
-			autobind grabs every minidriver in the project - including ones already
-			assigned to the TV. Which app launches where is the installer's decision.
-		-->
-		<connection proxybindingid="5999">
 			<id>3101</id>
 			<type>5</type>
 			<connectionname>MiniApp 1</connectionname>
@@ -311,7 +234,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3102</id>
 			<type>5</type>
 			<connectionname>MiniApp 2</connectionname>
@@ -323,7 +246,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3103</id>
 			<type>5</type>
 			<connectionname>MiniApp 3</connectionname>
@@ -335,7 +258,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3104</id>
 			<type>5</type>
 			<connectionname>MiniApp 4</connectionname>
@@ -347,7 +270,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3105</id>
 			<type>5</type>
 			<connectionname>MiniApp 5</connectionname>
@@ -359,7 +282,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3106</id>
 			<type>5</type>
 			<connectionname>MiniApp 6</connectionname>
@@ -371,7 +294,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3107</id>
 			<type>5</type>
 			<connectionname>MiniApp 7</connectionname>
@@ -383,7 +306,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3108</id>
 			<type>5</type>
 			<connectionname>MiniApp 8</connectionname>
@@ -395,7 +318,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3109</id>
 			<type>5</type>
 			<connectionname>MiniApp 9</connectionname>
@@ -407,7 +330,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3110</id>
 			<type>5</type>
 			<connectionname>MiniApp 10</connectionname>
@@ -419,7 +342,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3111</id>
 			<type>5</type>
 			<connectionname>MiniApp 11</connectionname>
@@ -431,7 +354,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3112</id>
 			<type>5</type>
 			<connectionname>MiniApp 12</connectionname>
@@ -443,7 +366,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3113</id>
 			<type>5</type>
 			<connectionname>MiniApp 13</connectionname>
@@ -455,7 +378,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3114</id>
 			<type>5</type>
 			<connectionname>MiniApp 14</connectionname>
@@ -467,7 +390,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3115</id>
 			<type>5</type>
 			<connectionname>MiniApp 15</connectionname>
@@ -479,7 +402,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3116</id>
 			<type>5</type>
 			<connectionname>MiniApp 16</connectionname>
@@ -491,7 +414,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3117</id>
 			<type>5</type>
 			<connectionname>MiniApp 17</connectionname>
@@ -503,7 +426,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3118</id>
 			<type>5</type>
 			<connectionname>MiniApp 18</connectionname>
@@ -515,7 +438,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3119</id>
 			<type>5</type>
 			<connectionname>MiniApp 19</connectionname>
@@ -527,7 +450,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3120</id>
 			<type>5</type>
 			<connectionname>MiniApp 20</connectionname>
@@ -539,7 +462,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3121</id>
 			<type>5</type>
 			<connectionname>MiniApp 21</connectionname>
@@ -551,7 +474,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3122</id>
 			<type>5</type>
 			<connectionname>MiniApp 22</connectionname>
@@ -563,7 +486,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3123</id>
 			<type>5</type>
 			<connectionname>MiniApp 23</connectionname>
@@ -575,7 +498,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3124</id>
 			<type>5</type>
 			<connectionname>MiniApp 24</connectionname>
@@ -587,7 +510,7 @@
 				</class>
 			</classes>
 		</connection>
-		<connection proxybindingid="5999">
+		<connection proxybindingid="5001">
 			<id>3125</id>
 			<type>5</type>
 			<connectionname>MiniApp 25</connectionname>
