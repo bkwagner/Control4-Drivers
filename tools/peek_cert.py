@@ -12,31 +12,13 @@ This is the feasibility probe for in-driver pairing.
 import socket
 import struct
 import sys
+from pathlib import Path
 
 HOST, PORT = sys.argv[1] if len(sys.argv) > 1 else "10.200.10.50", 6467
 
 
-def client_hello() -> bytes:
-    body = b""
-    body += b"\x03\x03"                       # client_version TLS 1.2
-    body += b"\xAA" * 32                      # random (fixed; we never finish)
-    body += b"\x00"                           # session_id length
-    ciphers = [0xC02F, 0xC030, 0xC027, 0x009C, 0x002F]
-    body += struct.pack(">H", len(ciphers) * 2)
-    for c in ciphers:
-        body += struct.pack(">H", c)
-    body += b"\x01\x00"                       # compression: null
-
-    ext = b""
-    groups = struct.pack(">HH", 0x0017, 0x001D)          # secp256r1, x25519
-    ext += struct.pack(">HHH", 0x000A, len(groups) + 2, len(groups)) + groups
-    ext += struct.pack(">HHB", 0x000B, 2, 1) + b"\x00"   # ec_point_formats
-    sigs = struct.pack(">HHHH", 0x0401, 0x0403, 0x0501, 0x0804)
-    ext += struct.pack(">HHH", 0x000D, len(sigs) + 2, len(sigs)) + sigs
-    body += struct.pack(">H", len(ext)) + ext
-
-    hs = b"\x01" + struct.pack(">I", len(body))[1:] + body       # handshake header
-    return b"\x16\x03\x01" + struct.pack(">H", len(hs)) + hs      # record header
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from peek_reference import client_hello  # noqa: E402
 
 
 def main() -> None:
