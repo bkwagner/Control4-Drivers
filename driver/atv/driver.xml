@@ -227,8 +227,15 @@
 		</connection>
 
 		<!--
-			Internal hop: the switcher feeds the media_player. Both ends autobind and
-			are hidden, so Composer wires it and the installer never sees it.
+			Internal hop: the switcher feeds the media_player.
+
+			These are deliberately NOT hidden. autobind was tried and does not fire
+			on real hardware: they are plain HDMI and STEREO links, and a project
+			full of HDMI inputs gives Composer no unambiguous partner to choose.
+			Hidden connections do not appear in Composer at all, so when autobind
+			declined there was no way to bind them - the switcher was simply orphaned
+			with no diagnostic. Visible and bound by hand is worse to look at and
+			works.
 		-->
 		<connection proxybindingid="5999">
 			<id>2110</id>
@@ -242,7 +249,6 @@
 					<autobind>true</autobind>
 				</class>
 			</classes>
-			<hidden>True</hidden>
 		</connection>
 		<connection proxybindingid="5999">
 			<id>4110</id>
@@ -256,7 +262,6 @@
 					<autobind>true</autobind>
 				</class>
 			</classes>
-			<hidden>True</hidden>
 		</connection>
 		<connection proxybindingid="5001">
 			<id>1010</id>
@@ -270,7 +275,6 @@
 					<autobind>true</autobind>
 				</class>
 			</classes>
-			<hidden>True</hidden>
 		</connection>
 		<connection proxybindingid="5001">
 			<id>3010</id>
@@ -284,7 +288,6 @@
 					<autobind>true</autobind>
 				</class>
 			</classes>
-			<hidden>True</hidden>
 		</connection>
 
 		<!--
