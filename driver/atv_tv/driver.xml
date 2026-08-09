@@ -214,6 +214,38 @@
 			<hidden>True</hidden>
 		</connection>
 
+		<!--
+			Room binding. Without this a tv proxy never appears in a room: it is what
+			makes the television the room's video end point, audio end point and
+			volume control. Copied from the Sony Bravia driver in this project, which
+			declares exactly this and works.
+
+			Note audiosource and videosource are True here, unlike the hidden proxy
+			connection - this is the binding that tells Control4 the device can be a
+			room's source of both.
+		-->
+		<connection proxybindingid="5001">
+			<id>7000</id>
+			<facing>6</facing>
+			<connectionname>Room Selection - Output</connectionname>
+			<type>7</type>
+			<consumer>False</consumer>
+			<audiosource>True</audiosource>
+			<videosource>True</videosource>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>VIDEO_SELECTION</classname>
+				</class>
+				<class>
+					<classname>AUDIO_VOLUME</classname>
+				</class>
+				<class>
+					<classname>AUDIO_SELECTION</classname>
+				</class>
+			</classes>
+		</connection>
+
 		<!-- HDMI inputs. Bind whatever is plugged into the television here. -->
 		<connection proxybindingid="5001">
 			<id>1001</id>
