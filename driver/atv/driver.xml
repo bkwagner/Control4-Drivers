@@ -70,6 +70,26 @@
 				<description>Used for Wake-on-LAN. Learned automatically on the first successful connection - only set this by hand if that fails. NOTE: Wake-on-LAN only works for a WIRED device. On Wi-Fi it cannot work at all, and waking depends instead on Network Standby (Settings - Network and Internet) keeping the connection alive through standby.</description>
 			</property>
 			<property>
+				<name>Play Store Fallback</name>
+				<type>LIST</type>
+				<items>
+					<item>On</item>
+					<item>Off</item>
+				</items>
+				<default>On</default>
+				<readonly>false</readonly>
+				<description>Some apps cannot be launched directly on this hardware; the device opens their Play Store page instead. With this On, the driver presses OK on that page, which launches the app. CAUTION: if the app is NOT installed the focused button is Install rather than Open, and this will begin an installation. Set to Off to never press.</description>
+			</property>
+			<property>
+				<name>Play Store Fallback Delay</name>
+				<minimum>3</minimum>
+				<maximum>40</maximum>
+				<default>12</default>
+				<type>RANGED_INTEGER</type>
+				<readonly>false</readonly>
+				<description>Seconds to wait before pressing OK on the Play Store page. The page reports as the current app within half a second but is not interactive for much longer. Measured for HBO Max: 5s fails, 10s works. Raise this if an app still fails to launch.</description>
+			</property>
+			<property>
 				<name>Debug Mode</name>
 				<type>LIST</type>
 				<items>

@@ -105,6 +105,29 @@ local CONNECT_TIMEOUT = 30
 
 local PERSIST_MAC = 'device_mac'
 
+--[[
+	Play Store fallback.
+
+	Some apps cannot be launched by app link on this hardware - the device cannot
+	resolve a launch intent for them and opens their Play Store page instead, with
+	the "Open" button focused. Measured against the target device: ESPN, HBO Max and
+	Apple TV behave this way while seven other apps launch normally, and eight
+	different app_link formats fail for them.
+
+	Pressing OK on that page does launch the app, but only once the page has
+	settled - an immediate press does nothing. So: if the Play Store appears shortly
+	after we asked for an app, wait, then press OK.
+
+	The delay matters and varies by app. Measured for HBO Max: 5s fails, 10s and 15s
+	both work, even though the store page reports as current_app within half a
+	second - it is visible long before it is interactive. ESPN needed longer still
+	and was not reliably reproducible, which is why the delay is a property rather
+	than a constant.
+]]
+local PLAYSTORE_PACKAGE = 'com.android.vending'
+local PLAYSTORE_SETTLE_DEFAULT = 12   -- seconds; margin over the measured 10s
+local PLAYSTORE_WINDOW  = 45    -- how long a launch stays "ours" to act on
+
 --------------------------------------------------------------------------------
 -- State
 --------------------------------------------------------------------------------
@@ -128,6 +151,9 @@ Driver = {
 	ignoreOffline   = false,-- suppresses the OFFLINE our own NetDisconnect causes
 	silentTicks     = 0,    -- watchdog ticks with no inbound traffic
 	mac             = nil,  -- learned from the connection, used for Wake-on-LAN
+
+	pendingLaunch      = nil,  -- app link we asked for but have not seen open yet
+	pendingLaunchTimer = nil,
 }
 
 --------------------------------------------------------------------------------
@@ -470,6 +496,32 @@ local function handleControlMessage(msg)
 		C4:UpdateProperty('Current App', package)
 		dbg('current app: %s', package)
 
+		if (package == Driver.pendingLaunch) then
+			-- It opened on its own; nothing more to do.
+			Driver.pendingLaunch = nil
+
+		elseif (package == PLAYSTORE_PACKAGE and Driver.pendingLaunch ~= nil) then
+			--[[
+				The device could not resolve a launch intent and opened the store
+				page instead. Pressing OK there launches the app, but only after the
+				page settles - an immediate press is swallowed.
+			]]
+			local wanted = Driver.pendingLaunch
+			if ((Properties['Play Store Fallback'] or 'On') ~= 'On') then
+				dbg('Play Store opened for %q; fallback disabled', wanted)
+				Driver.pendingLaunch = nil
+			else
+				local settle = tonumber(Properties['Play Store Fallback Delay'])
+					or PLAYSTORE_SETTLE_DEFAULT
+				dbg('Play Store opened for %q; pressing OK in %ds', wanted, settle)
+				Driver.pendingLaunch = nil
+				C4:SetTimer(settle * 1000, function()
+					SendKeyCode(keycodes.KEYCODE.KEYCODE_DPAD_CENTER,
+						keycodes.DIRECTION.SHORT)
+				end)
+			end
+		end
+
 	elseif (msg.kind == 'volume') then
 		-- Reported but deliberately not acted on: volume routes over CEC to the
 		-- TV, which Control4 already controls. See lib/keymap.lua.
@@ -751,6 +803,14 @@ function LaunchApp(appLink)
 	-- Quoted and sized, so an unexpected character is visible next time.
 	dbg('launching %q (%d bytes)', appLink, #appLink)
 	send(BINDING_CONTROL, PORT_CONTROL, atv.buildAppLink(appLink))
+
+	-- Only a Play Store that appears shortly after this counts as ours to act on.
+	Driver.pendingLaunch = appLink
+	Driver.pendingLaunchTimer = cancelTimer(Driver.pendingLaunchTimer)
+	Driver.pendingLaunchTimer = C4:SetTimer(PLAYSTORE_WINDOW * 1000, function()
+		Driver.pendingLaunchTimer = nil
+		Driver.pendingLaunch = nil
+	end)
 end
 
 --------------------------------------------------------------------------------
