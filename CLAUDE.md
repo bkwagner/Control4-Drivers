@@ -157,39 +157,42 @@ The device drops TCP whenever it sleeps, so disconnection is routine, not a faul
 - **Retrying stops** when there is no IP or no stored identity. Nothing to connect to
   is a configuration state, not a transient failure.
 
-## App launching — measured, and only partly works
+## App launching — measured
 
-`RemoteAppLinkLaunchRequest` takes a bare Android package name. The mechanism is
-sound: Netflix launches reliably, end to end, from the driver.
-
-But only some apps launch. Measured against the target Chromecast on 2026-08-09,
-all with packages confirmed correct and every app visibly installed:
+`RemoteAppLinkLaunchRequest` takes a bare Android package name and mostly works.
+Measured against the target Chromecast on 2026-08-09:
 
 | Launches | Bounces to the Play Store |
 |---|---|
 | `com.netflix.ninja` | `com.espn.score_center` |
 | `com.disney.disneyplus` | `com.wbd.stream` |
-| `com.hulu.livingroomplus` | `com.tubitv` |
-| `com.google.android.youtube.tv` | `com.google.android.youtube.tvunplugged` |
-| | `com.apple.atve.androidtv.appletv` |
-| | `com.peacocktv.peacockandroid` |
+| `com.hulu.livingroomplus` | `com.apple.atve.androidtv.appletv` |
+| `com.google.android.youtube.tv` | |
+| `com.peacocktv.peacockandroid` | |
+| `com.tubitv` | |
+| `com.google.android.youtube.tvunplugged` | |
 
-Not a package-name problem: ESPN and HBO Max both appear in the device's own
-"Your apps" row, and the driver has seen `current_app` report `com.wbd.stream`
-and `com.espn.score_center` on this very device.
+**Measurement caveat, learned the hard way:** launches take well over 7 seconds to
+settle, and consecutive tests contaminate each other — an app launched by one test
+shows up as `current_app` during the next. An earlier run with a 7-second window
+wrongly recorded Peacock, Tubi and YouTube TV as failures. Use a 20s+ window and
+return to the launcher between tests.
 
-Also not a format problem. For a failing app, all of these were tried and none
-launched it: bare package, `android-app://`, `market://launch?id=`, the app's own
-URI schemes, an `https://` deep link, and two `intent://` forms — while a bare
-package for Netflix launched immediately as a control in the same session.
+Not a format problem. For a failing app, bare package, `android-app://`,
+`market://launch?id=`, the app's own URI schemes, an `https://` deep link and two
+`intent://` forms were all tried; none launched it, while a bare package for
+Netflix launched immediately as a control in the same session.
 
-Working theory: the four that launch are the ones preloaded on a Chromecast with
-Google TV, and the remote service may only resolve launch intents for preloaded or
-system-privileged apps. Unconfirmed. If so, no driver change can help.
+The three that fail are unexplained. ESPN and HBO Max both appear in the device's
+"Your apps" row, and the driver has seen `current_app` report `com.espn.score_center`
+and `com.wbd.stream` on this device — so the packages are right and the apps are
+installed. What the Play Store page shows for them ("Open", "Update", or "item not
+found") would discriminate between a wrong package, a pending update intercepting
+the launch, and a launch-intent problem. Not yet checked.
 
-**Practical consequence:** bind mini-apps for apps that are verified to launch.
-The minidriver's `UM_NV_SHIELD` value is passed through unchanged as the app link,
-so any working string can go there without touching the driver.
+**Practical consequence:** bind mini-apps for apps verified to launch. The
+minidriver's `UM_NV_SHIELD` value is passed through unchanged as the app link, so
+any working string can go there without touching the driver.
 
 ## State feedback — measured behaviour
 
