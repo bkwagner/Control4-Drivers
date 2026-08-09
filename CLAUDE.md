@@ -158,9 +158,11 @@ comes from.
 The remote protocol has no input-switching message, so `SET_INPUT` on a television
 is translated to `KEYCODE_TV_INPUT_HDMI_1..4`.
 
-Known target televisions: TCL `G03_4K_US / BeyondTV4 / Smart TV Pro` at
-10.200.10.26 — both ports open, TLS 1.2 and 1.3, so in-driver pairing works there
-too.
+Confirmed on hardware 2026-08-09, TCL `Smart TV Pro` at 10.200.10.26: paired
+in-driver first time, harvested a 527-byte certificate (the Chromecast's is 836, so
+the handling is not over-fitted to one device), connected, and reported
+`volume: level=17 max=100`. **A television does report real volume**, unlike the
+streamer's `max=0` — which is what the variant split was for.
 
 ## Resilience model
 
