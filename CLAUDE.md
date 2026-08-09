@@ -160,6 +160,20 @@ driver.
 | Volume | not mapped (CEC owns it) | mapped, and reported |
 | Reselect Room Source | On | Off — a `tv` proxy is already in the audio path |
 
+**A `tv` proxy needs capabilities and a room binding, or Navigator ignores it.**
+Both were missed initially, and both fail the same confusing way: the device looks
+perfectly correct in Composer — listed in the room, Video Endpoint set, marked
+Visible under Watch — while Navigator shows no Watch area at all.
+
+- `<connection>` id 7000, type 7, classes `VIDEO_SELECTION` / `AUDIO_VOLUME` /
+  `AUDIO_SELECTION`. Without it there is nothing to bind to the room.
+- A populated `<capabilities>` block. An empty one advertises no inputs and no
+  audio, and Navigator will not build a Watch experience around a display that
+  claims neither.
+
+Both were copied from the Sony Bravia driver inside the project file, which is the
+best available reference for what a working `tv` proxy declares.
+
 **The mini-app range matters.** The SDK warns that on TV and receiver proxies,
 inputs above `x099` do not raise events, variable changes or conditionals — so the
 streamer's 3101–3125 would be silently broken on a `tv` proxy. The Sony Bravia in

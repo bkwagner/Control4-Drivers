@@ -9,6 +9,9 @@
 	<version>1</version>
 	<control>lua_gen</control>
 	<driver>DriverWorks</driver>
+	<controlmethod>ip</controlmethod>
+	<small>devices_sm	v.gif</small>
+	<large>devices_lg	v.gif</large>
 	<minimum_os_version>3.4.1</minimum_os_version>
 	<config>
 		<script file="driver.lua"></script>
@@ -605,5 +608,42 @@
 			</classes>
 		</connection>
 	</connections>
-	<capabilities/>
+	<!--
+		A tv proxy advertises what the display can do through these. An empty
+		capabilities block advertises nothing, and Navigator will not build a Watch
+		experience around a display that claims no inputs and no audio - which is
+		why this driver appeared correctly in Composer but never in Navigator.
+
+		Modelled on the Sony Bravia driver in this project, adjusted to what this
+		driver actually supports: volume is up/down and mute-toggle via key codes,
+		not discrete levels, and there are four HDMI inputs.
+	-->
+	<capabilities>
+		<has_audio>True</has_audio>
+		<audio_consumer_count>0</audio_consumer_count>
+		<audio_provider_count>1</audio_provider_count>
+		<video_consumer_count>4</video_consumer_count>
+		<video_provider_count>0</video_provider_count>
+
+		<has_discrete_input_select>True</has_discrete_input_select>
+		<has_toad_input_select>False</has_toad_input_select>
+		<requires_channel_after_input>False</requires_channel_after_input>
+
+		<has_up_down_volume_control>True</has_up_down_volume_control>
+		<has_discrete_volume_control>False</has_discrete_volume_control>
+		<has_toggle_mute_control>True</has_toggle_mute_control>
+		<has_discrete_mute_control>False</has_discrete_mute_control>
+
+		<has_channel_up_down>True</has_channel_up_down>
+		<has_discrete_channel_select>True</has_discrete_channel_select>
+
+		<has_discrete_balance_control>False</has_discrete_balance_control>
+		<has_discrete_bass_control>False</has_discrete_bass_control>
+		<has_discrete_treble_control>False</has_discrete_treble_control>
+		<has_discrete_loudness_control>False</has_discrete_loudness_control>
+		<has_toggle_loudness_control>False</has_toggle_loudness_control>
+		<has_up_down_balance_control>False</has_up_down_balance_control>
+		<has_up_down_bass_control>False</has_up_down_bass_control>
+		<has_up_down_treble_control>False</has_up_down_treble_control>
+	</capabilities>
 </devicedata>
