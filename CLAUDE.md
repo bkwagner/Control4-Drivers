@@ -157,61 +157,51 @@ The device drops TCP whenever it sleeps, so disconnection is routine, not a faul
 - **Retrying stops** when there is no IP or no stored identity. Nothing to connect to
   is a configuration state, not a transient failure.
 
-## App launching — measured
+## App launching — send a market:// URI, never a bare package
 
-`RemoteAppLinkLaunchRequest` takes a bare Android package name and mostly works.
-Measured against the target Chromecast on 2026-08-09:
+**The device rejects a bare package name as `app_link`.** It answers with a
+`RemoteError` naming field 90 and drops the connection. Wrapping the package as
+`market://launch?id=<package>` is accepted, and the Play Store resolves it to the
+installed app.
 
-| Launches | Bounces to the Play Store |
+Measured from the driver against the target Chromecast:
+
+| Sent | Result |
 |---|---|
-| `com.netflix.ninja` | `com.espn.score_center` |
-| `com.disney.disneyplus` | `com.wbd.stream` |
-| `com.hulu.livingroomplus` | `com.apple.atve.androidtv.appletv` |
-| `com.google.android.youtube.tv` | |
-| `com.peacocktv.peacockandroid` | |
-| `com.tubitv` | |
-| `com.google.android.youtube.tvunplugged` | |
+| `com.netflix.ninja` | RemoteError, connection dropped |
+| `market://launch?id=com.espn.score_center` | accepted, ESPN launched |
 
-**Measurement caveat, learned the hard way:** launches take well over 7 seconds to
-settle, and consecutive tests contaminate each other — an app launched by one test
-shows up as `current_app` during the next. An earlier run with a 7-second window
-wrongly recorded Peacock, Tubi and YouTube TV as failures. Use a 20s+ window and
-return to the launcher between tests.
+`LaunchApp` therefore wraps anything without a `://` scheme. A value that already
+carries a scheme is passed through untouched, so real deep links still work. This
+means minidrivers can keep publishing plain package names in `UM_NV_SHIELD`.
 
-Not a format problem. For a failing app, bare package, `android-app://`,
-`market://launch?id=`, the app's own URI schemes, an `https://` deep link and two
-`intent://` forms were all tried; none launched it, while a bare package for
-Netflix launched immediately as a control in the same session.
+Credit for the form: `kud/gtv`, whose app catalog calls `market://launch?id=` "the
+most reliable method on Google TV, verified on a real device". It was the one form
+never tried from the driver.
 
-**The three that fail are handled by a Play Store fallback.** The device cannot
-resolve a launch intent for them and opens their Play Store page instead, with
-"Open" focused — the page shows "Open", so the package is right and the app is
-installed. Pressing OK there launches the app.
+**Unexplained, and left alone:** a desktop client sending the identical bare-package
+bytes is *not* rejected — Netflix launches from `tools/send_key.py --launch
+com.netflix.ninja`. The driver's bytes were verified byte-identical, on the
+controller itself, against the same value. Feature masks match (615 both), and
+swapping the driver onto the desktop's paired certificate changed nothing. Since a
+form that always works is known, this is not worth chasing further.
 
-The driver presses OK and keeps pressing until the app opens, first press after
-1.5s then every 2s, stopping the moment `current_app` becomes the app it asked for.
-Verified on hardware: ESPN 2 presses, HBO Max 2, Apple TV 3 — all within about four
-seconds.
+### Play Store fallback
 
-A fixed delay was tried first and was the wrong model: HBO Max needed 10s while
-ESPN failed even at 20s, because readiness is not a fixed interval. Press-and-retry
-adapts, starts as fast as a person would, and needs no tuning. Do not replace it
-with a delay.
+Some apps still land on their Play Store page rather than opening, with "Open"
+focused. The driver presses OK and keeps pressing until the app opens — first press
+after 1.5s, then every 2s, stopping the moment `current_app` becomes the app it
+asked for. Verified: ESPN 2 presses, HBO Max 2, Apple TV 3.
+
+A fixed delay was tried first and was wrong: HBO Max needed 10s while ESPN failed
+even at 20s. Readiness is not a fixed interval. Do not replace the retry with a
+delay.
 
 The fallback only fires for a store page appearing within 45s of a launch this
 driver requested, stops if the user navigates elsewhere, and gives up after 10
 presses. **If a bound app is not installed the focused button is Install, not Open,
 and pressing it starts an installation** — the `Play Store Fallback` property turns
-the behaviour off.
-
-Eight app_link formats were tried before resorting to this and none launched those
-apps: bare package, `android-app://`, `market://launch?id=`, the app's own URI
-schemes, an `https://` deep link, two `intent://` forms, and `package/activity`
-component form using the real activity name from the Sony's app list.
-
-**Practical consequence:** bind mini-apps for apps verified to launch. The
-minidriver's `UM_NV_SHIELD` value is passed through unchanged as the app link, so
-any working string can go there without touching the driver.
+it off.
 
 ## State feedback — measured behaviour
 

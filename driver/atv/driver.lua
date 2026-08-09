@@ -847,6 +847,24 @@ function LaunchApp(appLink)
 		dbg('LaunchApp called with an empty link')
 		return
 	end
+
+	--[[
+		A bare package name is REJECTED by the device: it answers with a RemoteError
+		naming this message and drops the connection. Wrapping it as a market://
+		launch URI is accepted, and the Play Store resolves it to the installed app.
+
+		Measured on hardware from the driver: 'com.netflix.ninja' rejected,
+		'market://launch?id=com.espn.score_center' accepted and launched. (Curiously,
+		a desktop client sending the identical bare-package bytes is not rejected -
+		unexplained, and not worth chasing now that a form which always works is
+		known.)
+
+		Anything already carrying a scheme is passed through untouched, so a real
+		deep link still works.
+	]]
+	if (string.find(appLink, '://', 1, true) == nil) then
+		appLink = 'market://launch?id=' .. appLink
+	end
 	if (not requireConnection()) then return end
 
 	-- Quoted and sized, so an unexpected character is visible next time.

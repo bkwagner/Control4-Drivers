@@ -236,7 +236,8 @@ def print_miniapp_tests(lua, g) -> None:
         g.ClearSent()
         g.ReceivedFromProxy(5001, b"SET_INPUT", params)
 
-    for input_id, want in [(3101, b"org.jellyfin.androidtv"), (3102, b"com.wbd.stream")]:
+    for input_id, want in [(3101, b"market://launch?id=org.jellyfin.androidtv"),
+                           (3102, b"market://launch?id=com.wbd.stream")]:
         set_input(input_id)
         data = g.SentData(1)
         if data is None:
@@ -257,7 +258,8 @@ def print_miniapp_tests(lua, g) -> None:
     # where selecting a mini-app produced only ON and SELECT_SOURCE. The driver
     # therefore launches from the room's selected-device variable instead.
     g.RefreshMiniApps()
-    for proxy_id, want in [(300, b"org.jellyfin.androidtv"), (310, b"com.wbd.stream")]:
+    for proxy_id, want in [(300, b"market://launch?id=org.jellyfin.androidtv"),
+                           (310, b"market://launch?id=com.wbd.stream")]:
         g.ClearSent()
         g.OnWatchedVariableChanged(11, 1000, str(proxy_id).encode())
         data = g.SentData(1)
@@ -276,7 +278,7 @@ def print_miniapp_tests(lua, g) -> None:
         b"com.wbd.stream" + bytes([10]),                   # trailing newline
         bytes([9]) + b"com.wbd.stream" + bytes([13, 10]),  # tab, CRLF
     ]
-    for raw, want in [(r, b"com.wbd.stream") for r in padded]:
+    for raw, want in [(r, b"market://launch?id=com.wbd.stream") for r in padded]:
         g.ClearSent()
         g.LaunchApp(raw)
         data = g.SentData(1)
@@ -290,6 +292,30 @@ def print_miniapp_tests(lua, g) -> None:
     g.ClearSent()
     g.LaunchApp(b"   ")
     check("whitespace-only link sends nothing", g.SentCount(), 0)
+
+    # A bare package name is rejected by the device with a RemoteError; the
+    # market:// launch URI is accepted. Minidrivers publish bare package names, so
+    # the driver converts. Anything already carrying a scheme passes through.
+    for raw, want in [
+        (b"com.netflix.ninja", b"market://launch?id=com.netflix.ninja"),
+        (b"org.jellyfin.androidtv", b"market://launch?id=org.jellyfin.androidtv"),
+        (b"  com.wbd.stream  ", b"market://launch?id=com.wbd.stream"),
+        (b"market://launch?id=com.espn.score_center",
+         b"market://launch?id=com.espn.score_center"),
+        (b"https://www.netflix.com/title/80057281",
+         b"https://www.netflix.com/title/80057281"),
+        (b"sportscenter://", b"sportscenter://"),
+    ]:
+        g.ClearSent()
+        g.LaunchApp(raw)
+        data = g.SentData(1)
+        if data is None:
+            check(f"{raw!r} sent", "nothing sent", want)
+            continue
+        msg = RemoteMessage()
+        msg.ParseFromString(data[1:])
+        check(f"{raw.decode().strip()[:34]:<34} -> {want.decode()[:44]}",
+              msg.remote_app_link_launch_request.app_link.encode(), want)
 
     # Selecting something that is not one of our mini-apps must do nothing.
     g.ClearSent()
