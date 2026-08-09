@@ -202,9 +202,15 @@
 	</proxies>
 	<events/>
 	<connections>
+		<!--
+			The proxy connection. Deliberately NOT hidden: a media_player's proxy
+			connection is marked hidden in the SDK samples, and copying that flag
+			here hid the television from Navigator entirely - it looked correct
+			in Composer, with a video end point and marked Visible, and simply did
+			not appear. The Roku TV and Sony drivers leave it visible.
+		-->
 		<connection>
 			<id>5001</id>
-			<facing>6</facing>
 			<connectionname>TV</connectionname>
 			<type>2</type>
 			<consumer>False</consumer>
@@ -214,7 +220,6 @@
 					<classname>TV</classname>
 				</class>
 			</classes>
-			<hidden>True</hidden>
 		</connection>
 
 		<!--
