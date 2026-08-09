@@ -203,6 +203,37 @@ presses. **If a bound app is not installed the focused button is Install, not Op
 and pressing it starts an installation** — the `Play Store Fallback` property turns
 it off.
 
+## Mini-apps and the remote going dead in-app
+
+While a mini-app is the selected source, Navigator sends key presses to the
+**minidriver**, not to this driver. The minidriver forwards them as `PASSTHROUGH`
+only to a device that is both bound to its mini-app connection **and in the room's
+audio path**:
+
+```lua
+for _, id in ipairs (RoomIDRoutes [roomId]) do    -- room's CURRENT_AUDIO_PATH
+    if (ConnectedDevices [id]) then RoomIDTargets [roomId] = id
+```
+
+Mini-apps bound to this driver have **no audio path**, because installers bind
+`HDMI OUT` and nothing else. Composer shows this directly — its Available Video
+Sources list has an Audio Path column, and the apps bound here read `no` while the
+Sony's read `yes`. The minidriver therefore finds no target and silently drops
+every key: the remote does nothing inside an app and works again the moment the
+Google TV is reselected.
+
+Two fixes, and the driver ships the second:
+
+1. **Bind `AUDIO OUT`** so this device really is in the room's audio path. Keeps the
+   app showing as the source in Navigator. Needs a connection binding, and the
+   audio out may need an HDMI class added to bind against a TV's HDMI input.
+2. **`Reselect Room Source`** (default On) — after launching, the driver makes
+   itself the room's source again, so keys arrive on its own proxy. Lua only, works
+   immediately. Cost: Navigator shows "Google TV" rather than the app.
+
+This is the same trade-off the SDK template makes with its Passthrough Mode
+property. Set the property Off if you have bound `AUDIO OUT`.
+
 ## State feedback — measured behaviour
 
 Verified against the target device on 2026-08-08 via `tools/send_key.py`.

@@ -933,6 +933,46 @@ function RefreshMiniApps()
 	dbg('mini-apps available to launch: %d', count)
 end
 
+--[[
+	Put this device back as the room's source after launching a mini-app.
+
+	While a mini-app is the selected source, Navigator sends key presses to the
+	minidriver, which forwards them as PASSTHROUGH only to a device that is both
+	bound to its mini-app connection AND present in the room's audio path. This
+	driver's AUDIO OUT is typically unbound - the installer binds HDMI OUT and
+	nothing else - so the minidriver finds no target and silently drops every key.
+	The symptom is a remote that does nothing inside an app and works again as soon
+	as the Google TV is reselected.
+
+	Reselecting this device sidesteps that: keys then arrive on our own proxy
+	rather than through the minidriver. The trade-off is that Navigator shows
+	"Google TV" as the source instead of the app, which is the same trade-off the
+	SDK template makes with its Passthrough Mode property.
+
+	The alternative is to bind AUDIO OUT so this device really is in the room's
+	audio path, which keeps the app showing as the source. Set this property Off if
+	you have done that.
+]]
+function ReselectRoomSource(roomId)
+	if ((Properties['Reselect Room Source'] or 'On') ~= 'On') then
+		dbg('not reselecting room source; passthrough must reach us another way')
+		return
+	end
+
+	local proxyId = next(C4:GetBoundConsumerDevices(C4:GetDeviceID(), BINDING_PROXY) or {})
+	if (proxyId == nil) then
+		dbg('cannot reselect room source: this proxy is not bound')
+		return
+	end
+
+	-- Give the launch a moment first, or the reselect races it.
+	C4:SetTimer(1000, function()
+		dbg('reselecting device %s as source in room %s so keys route here',
+			tostring(proxyId), tostring(roomId))
+		C4:SendToDevice(tonumber(roomId), 'SELECT_VIDEO_DEVICE', { deviceid = proxyId })
+	end)
+end
+
 --- Track which device each room currently has selected.
 function RegisterRooms()
 	RoomIDs = C4:GetDevicesByC4iName('roomdevice.c4i') or {}
@@ -1057,6 +1097,7 @@ function OnWatchedVariableChanged(idDevice, idVariable, strValue)
 		dbg('room %s selected mini-app %s (%s)', tostring(idDevice),
 			tostring(app.name), app.id)
 		LaunchApp(app.id)
+		ReselectRoomSource(idDevice)
 	end
 end
 

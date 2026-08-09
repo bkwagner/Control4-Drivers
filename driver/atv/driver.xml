@@ -70,6 +70,17 @@
 				<description>Used for Wake-on-LAN. Learned automatically on the first successful connection - only set this by hand if that fails. NOTE: Wake-on-LAN only works for a WIRED device. On Wi-Fi it cannot work at all, and waking depends instead on Network Standby (Settings - Network and Internet) keeping the connection alive through standby.</description>
 			</property>
 			<property>
+				<name>Reselect Room Source</name>
+				<type>LIST</type>
+				<items>
+					<item>On</item>
+					<item>Off</item>
+				</items>
+				<default>On</default>
+				<readonly>false</readonly>
+				<description>After launching a mini-app, make this device the room's source again so the remote keeps working inside the app. Without it the mini-app stays selected and Navigator sends keys to the minidriver, which can only forward them to a device in the room's AUDIO path - so if only HDMI OUT is bound, every key is dropped. Cost: Navigator shows Google TV as the source rather than the app. Set Off if you have bound AUDIO OUT instead.</description>
+			</property>
+			<property>
 				<name>Play Store Fallback</name>
 				<type>LIST</type>
 				<items>

@@ -317,6 +317,29 @@ def print_miniapp_tests(lua, g) -> None:
         check(f"{raw.decode().strip()[:34]:<34} -> {want.decode()[:44]}",
               msg.remote_app_link_launch_request.app_link.encode(), want)
 
+    # After launching a mini-app the driver reselects itself as the room source,
+    # because a mini-app bound here has no audio path and the minidriver will not
+    # forward keys to a device outside it - so the remote would go dead in-app.
+    g.ClearSent()
+    g.OnWatchedVariableChanged(11, 1000, b"300")
+    g.FireTimerMs(1000)
+    calls = [g.Calls[i + 1].name for i in range(len(g.Calls))]
+    check("reselects the room source after launching",
+          b"SendToDevice" in calls, True)
+
+    lua2 = load_driver()
+    h = lua2.globals()
+    h.OnDriverInit()
+    h.OnDriverLateInit()
+    h.Properties[b"Reselect Room Source"] = b"Off"
+    h.SetMiniApp(3101, 300, b"org.jellyfin.androidtv", b"Jellyfin")
+    h.RefreshMiniApps()
+    h.OnWatchedVariableChanged(11, 1000, b"300")
+    before = len([1 for i in range(len(h.Calls)) if h.Calls[i + 1].name == b"SendToDevice"])
+    h.FireTimerMs(1000)
+    after = len([1 for i in range(len(h.Calls)) if h.Calls[i + 1].name == b"SendToDevice"])
+    check("does not reselect when turned off", after, before)
+
     # Selecting something that is not one of our mini-apps must do nothing.
     g.ClearSent()
     g.OnWatchedVariableChanged(11, 1000, b"9999")
