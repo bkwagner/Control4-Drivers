@@ -6,7 +6,7 @@
 -- bound TV driver, which does the launching.
 --
 -- UM_SONY_TV is the app TITLE as the TV reports it in getApplicationList;
--- verified against the Bravia at 10.200.10.20, which lists "Jellyfin" with
+-- verified against the Bravia at 192.0.2.20, which lists "Jellyfin" with
 -- uri com.sony.dtv.org.jellyfin.androidtv...StartupActivity.
 -- UM_NV_SHIELD is the Android package name.
 

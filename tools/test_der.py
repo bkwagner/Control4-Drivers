@@ -162,7 +162,7 @@ def main() -> None:
         n, e, status = der_lib.rsaPublicKeyFromCertificate(bad)
         check(f"rejects {why}", n, None)
 
-    ip = sys.argv[1] if len(sys.argv) > 1 else "10.200.10.50"
+    ip = sys.argv[1] if len(sys.argv) > 1 else "192.0.2.10"
     print(f"\nlive device certificate ({ip})")
     device_der = fetch_device_cert(ip)
     if device_der is None:

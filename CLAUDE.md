@@ -5,6 +5,17 @@ protocol v2** (mTLS + length-prefixed protobuf on ports 6467/6466). No ADB.
 
 Full background, prior art, and milestones: [docs/BRIEF.md](docs/BRIEF.md).
 
+## Addresses in this repository are placeholders
+
+Device addresses in docs and tool defaults are RFC 5737 documentation addresses
+(`192.0.2.x`), not real ones, because this repository is public. Pass the real
+address as an argument:
+
+```bash
+python tools/send_key.py <device-ip> KEYCODE_HOME
+python tools/test_der.py <device-ip>      # skips its live check without one
+```
+
 ## Layout
 
 | Path | What |
@@ -158,7 +169,7 @@ comes from.
 The remote protocol has no input-switching message, so `SET_INPUT` on a television
 is translated to `KEYCODE_TV_INPUT_HDMI_1..4`.
 
-Confirmed on hardware 2026-08-09, TCL `Smart TV Pro` at 10.200.10.26: paired
+Confirmed on hardware 2026-08-09, TCL `Smart TV Pro` at 192.0.2.11: paired
 in-driver first time, harvested a 527-byte certificate (the Chromecast's is 836, so
 the handling is not over-fitted to one device), connected, and reported
 `volume: level=17 max=100`. **A television does report real volume**, unlike the
@@ -305,7 +316,7 @@ Verified against the target device on 2026-08-08 via `tools/send_key.py`.
 
 ## Hardware assumptions
 
-- Target device: `10.200.10.50`, Android TV Remote Service **6.9** → protocol v2.
+- Target device: `192.0.2.10`, Android TV Remote Service **6.9** → protocol v2.
 - The device **requires TLS 1.2 minimum** (measured — it rejects 1.0/1.1 with alert
   70). Always use `VERIFY_METHOD = 'sslv23'`; `tlsv1`/`tlsv1_1` cannot work.
 - Google TV device with **Android TV Remote Service ≥ 5** (Settings → Apps → See all

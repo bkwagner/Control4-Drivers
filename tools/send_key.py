@@ -7,13 +7,13 @@ behaviour the Lua driver has to reproduce.
 Requires a paired certificate - run tools/pair.py first.
 
 Usage:
-    python tools/send_key.py 10.200.10.50 KEYCODE_DPAD_DOWN
-    python tools/send_key.py 10.200.10.50 KEYCODE_DPAD_DOWN --direction START_LONG
-    python tools/send_key.py 10.200.10.50 --launch https://www.netflix.com/title/80057281
-    python tools/send_key.py 10.200.10.50 --watch 30      # just observe state
+    python tools/send_key.py 192.0.2.10 KEYCODE_DPAD_DOWN
+    python tools/send_key.py 192.0.2.10 KEYCODE_DPAD_DOWN --direction START_LONG
+    python tools/send_key.py 192.0.2.10 --launch https://www.netflix.com/title/80057281
+    python tools/send_key.py 192.0.2.10 --watch 30      # just observe state
 
     # TV in another room: start it, walk over, watch 10 presses land
-    python tools/send_key.py 10.200.10.50 KEYCODE_DPAD_DOWN --delay 30 --repeat 10
+    python tools/send_key.py 192.0.2.10 KEYCODE_DPAD_DOWN --delay 30 --repeat 10
 """
 
 from __future__ import annotations

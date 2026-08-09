@@ -10,7 +10,7 @@ can be calibrated rather than guessed:
 
     launch package -> wait for com.android.vending -> wait N -> press OK -> observe
 
-    python tools/test_playstore_fallback.py 10.200.10.50 com.wbd.stream --settle 5
+    python tools/test_playstore_fallback.py 192.0.2.10 com.wbd.stream --settle 5
 """
 
 from __future__ import annotations

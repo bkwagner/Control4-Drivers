@@ -10,9 +10,9 @@ every later session is just an mTLS handshake on port 6466. Guard these files; l
 them means re-pairing, which needs physical access to read a code off the TV.
 
 Usage:
-    python tools/pair.py 10.200.10.50
-    python tools/pair.py 10.200.10.50 --verify        # test an existing cert
-    python tools/pair.py 10.200.10.50 --print-pem     # emit PEMs for driver import
+    python tools/pair.py 192.0.2.10
+    python tools/pair.py 192.0.2.10 --verify        # test an existing cert
+    python tools/pair.py 192.0.2.10 --print-pem     # emit PEMs for driver import
 """
 
 from __future__ import annotations
@@ -149,7 +149,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("host", help="device IP address, e.g. 10.200.10.50")
+    parser.add_argument("host", help="device IP address, e.g. 192.0.2.10")
     parser.add_argument(
         "--cert-dir", type=Path, default=DEFAULT_CERT_DIR,
         help=f"where certs live (default: {DEFAULT_CERT_DIR}/)",

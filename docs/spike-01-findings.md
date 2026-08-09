@@ -152,7 +152,7 @@ assuming the file survives.
 
 ### Device TLS profile — measured from a desktop, 2026-08-08
 
-Target: `10.200.10.50`, Android TV Remote Service **6.9** (≥ 5, so protocol v2).
+Target: `192.0.2.10`, Android TV Remote Service **6.9** (≥ 5, so protocol v2).
 Both ports open. Probed with `openssl s_client` presenting a self-signed RSA-2048
 client cert, `@SECLEVEL=0` to force the old versions to be offered.
 

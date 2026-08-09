@@ -14,7 +14,7 @@ import struct
 import sys
 from pathlib import Path
 
-HOST, PORT = sys.argv[1] if len(sys.argv) > 1 else "10.200.10.50", 6467
+HOST, PORT = sys.argv[1] if len(sys.argv) > 1 else "192.0.2.10", 6467
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
