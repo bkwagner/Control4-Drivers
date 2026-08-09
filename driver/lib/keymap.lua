@@ -39,9 +39,12 @@ M.COMMANDS = {
 	BACK              = { key = K.KEYCODE_BACK },
 	EXIT              = { key = K.KEYCODE_HOME },
 	--[[
-		MENU sends HOME, by request. The Halo's Exit button reaches the device as
-		something that only goes back, so Menu is the button that actually gets you
-		to the Google TV home screen.
+		MENU sends HOME, by request, because nothing else on the remote reaches the
+		Google TV home screen.
+
+		Confirmed on hardware: the remote's Exit button arrives as CANCEL, not EXIT,
+		so it maps to BACK - correct for a back button, but it means EXIT below never
+		fires on this remote. Menu is the button left to carry Home.
 
 		KEYCODE_MENU itself is still reachable: long-press OK gives the contextual
 		menu (START_LONG/END_LONG on ENTER), and the Send Key command can send
