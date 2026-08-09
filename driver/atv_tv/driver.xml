@@ -10,8 +10,8 @@
 	<control>lua_gen</control>
 	<driver>DriverWorks</driver>
 	<controlmethod>ip</controlmethod>
-	<small>devices_sm	v.gif</small>
-	<large>devices_lg	v.gif</large>
+	<small>devices_sm\tv.gif</small>
+	<large>devices_lg\tv.gif</large>
 	<minimum_os_version>3.4.1</minimum_os_version>
 	<config>
 		<script file="driver.lua"></script>
