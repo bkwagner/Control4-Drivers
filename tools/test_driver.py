@@ -465,6 +465,98 @@ def print_playstore_tests() -> None:
     check("no press when disabled", g.SentCount(), 0)
 
 
+def print_television_tests() -> None:
+    """The television variant shares all logic with the streamer but differs in
+    three measured ways: mini-app input range, HDMI input switching, and volume."""
+    print()
+    print("television variant")
+
+    def tv():
+        lua = load_driver()
+        g = lua.globals()
+        g.Properties[b"Device Type"] = b"Television"
+        g.SetPaired(b"cert", b"key")
+        g.OnDriverInit()
+        g.OnDriverLateInit()
+        g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"ONLINE")
+        m = RemoteMessage()
+        m.remote_set_active.active = 622
+        g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
+        return lua, g
+
+    def key_sent(g):
+        data = g.SentData(1)
+        if data is None:
+            return None
+        msg = RemoteMessage()
+        msg.ParseFromString(data[1:])
+        return msg.remote_key_inject.key_code
+
+    # Mini-apps live at 3051-3075 on a tv proxy: the SDK warns inputs above x099
+    # do not raise events there, and the Sony in this project uses that range.
+    lua, g = tv()
+    g.SetMiniApp(3051, 300, b"com.netflix.ninja", b"Netflix")
+    g.RefreshMiniApps()
+    params = lua.table()
+    params[b"INPUT"] = 3051
+    g.ClearSent()
+    g.ReceivedFromProxy(BINDING_PROXY, b"SET_INPUT", params)
+    data = g.SentData(1)
+    if data is None:
+        check("television mini-app at 3051 launches", "nothing sent", "a launch")
+    else:
+        msg = RemoteMessage()
+        msg.ParseFromString(data[1:])
+        check("television mini-app at 3051 launches",
+              msg.remote_app_link_launch_request.app_link.encode(),
+              b"market://launch?id=com.netflix.ninja")
+
+    # HDMI inputs are real on a television and switch with a key code.
+    for input_id, want_key, label in [(1001, 243, "HDMI 1"), (1002, 244, "HDMI 2"),
+                                      (1003, 245, "HDMI 3"), (1004, 246, "HDMI 4")]:
+        lua, g = tv()
+        params = lua.table()
+        params[b"INPUT"] = input_id
+        g.ClearSent()
+        g.ReceivedFromProxy(BINDING_PROXY, b"SET_INPUT", params)
+        check(f"SET_INPUT {input_id} -> {label}", key_sent(g), want_key)
+
+    # A streamer has no HDMI inputs; the same id is treated as a mini-app input.
+    lua, g = load_driver(), None
+    g = lua.globals()
+    g.SetPaired(b"cert", b"key")
+    g.OnDriverInit()
+    g.OnDriverLateInit()
+    g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"ONLINE")
+    params = lua.table()
+    params[b"INPUT"] = 1002
+    g.ClearSent()
+    g.ReceivedFromProxy(BINDING_PROXY, b"SET_INPUT", params)
+    check("streamer does not switch HDMI inputs", g.SentCount(), 0)
+
+    # Volume is mapped on a television and deliberately not on a streamer.
+    for command, want in [(b"START_VOL_UP", 24), (b"STOP_VOL_DOWN", 25),
+                          (b"MUTE_TOGGLE", 164)]:
+        lua, g = tv()
+        g.ClearSent()
+        g.ReceivedFromProxy(BINDING_PROXY, command, lua.table())
+        check(f"television maps {command.decode()}", key_sent(g), want)
+
+    lua, g = tv()
+    g.Properties[b"Device Type"] = b"Streamer"
+    g.ClearSent()
+    g.ReceivedFromProxy(BINDING_PROXY, b"START_VOL_UP", lua.table())
+    check("streamer still ignores volume", g.SentCount(), 0)
+
+    # A television reports real volume; a streamer reports max=0 and is ignored.
+    lua, g = tv()
+    m = RemoteMessage()
+    m.remote_set_volume_level.volume_max = 100
+    m.remote_set_volume_level.volume_level = 37
+    g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
+    check("television reports volume", g.Prop(b"Volume Level"), b"37 / 100")
+
+
 def print_resilience_tests() -> None:
     """Reconnect backoff, liveness watchdog, and Wake-on-LAN.
 
@@ -731,6 +823,7 @@ def main() -> None:
     print("\npairing exchange")
     print_miniapp_tests(lua, g)
     print_playstore_tests()
+    print_television_tests()
     print_resilience_tests()
 
     lua2 = load_driver()

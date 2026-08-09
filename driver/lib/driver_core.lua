@@ -43,9 +43,36 @@ local BINDING_PEEK     = 6003
 	RemoteAppLinkLaunchRequest accepts. That means every stock minidriver carrying
 	a Shield entry works here unmodified, with no new service ID to standardise.
 ]]
-local MINIAPP_TYPE          = 'UM_NV_SHIELD'
-local MINIAPP_BINDING_START = 3101
-local MINIAPP_BINDING_END   = 3125
+local MINIAPP_TYPE = 'UM_NV_SHIELD'
+
+--[[
+	Mini-app input range, which differs by proxy.
+
+	The SDK warns that on TV and receiver proxies, inputs above x099 do not raise
+	events, variable changes or conditionals - so the streamer's 3101-3125 range is
+	silently broken on a tv proxy. The Sony Bravia in this project uses 3051-3065
+	for exactly that reason, and the television variant follows it.
+]]
+local MINIAPP_RANGE = {
+	Streamer   = { first = 3101, last = 3125 },
+	Television = { first = 3051, last = 3075 },
+}
+
+--- HDMI inputs on a television, in binding order. Streamers have none.
+local HDMI_INPUTS = { [1001] = 1, [1002] = 2, [1003] = 3, [1004] = 4 }
+
+local function deviceType()
+	return Properties['Device Type'] or 'Streamer'
+end
+
+local function isTelevision()
+	return deviceType() == 'Television'
+end
+
+local function miniAppRange()
+	local r = MINIAPP_RANGE[deviceType()] or MINIAPP_RANGE.Streamer
+	return r.first, r.last
+end
 
 local ROOM_SELECTED_DEVICE = 1000
 
@@ -559,10 +586,18 @@ local function handleControlMessage(msg)
 		end
 
 	elseif (msg.kind == 'volume') then
-		-- Reported but deliberately not acted on: volume routes over CEC to the
-		-- TV, which Control4 already controls. See lib/keymap.lua.
-		dbg('volume reported (ignored): level=%d max=%d muted=%s',
-			msg.level or 0, msg.max or 0, tostring(msg.muted))
+		if (isTelevision() and (msg.max or 0) > 0) then
+			-- A television owns its volume, so the report is meaningful.
+			C4:UpdateProperty('Volume Level', string.format('%d / %d%s',
+				msg.level or 0, msg.max or 0, msg.muted and ' (muted)' or ''))
+			dbg('volume: level=%d max=%d muted=%s',
+				msg.level or 0, msg.max or 0, tostring(msg.muted))
+		else
+			-- On a streamer volume routes over CEC to the display, which Control4
+			-- already controls, and the device reports max=0. See lib/keymap.lua.
+			dbg('volume reported (ignored): level=%d max=%d muted=%s',
+				msg.level or 0, msg.max or 0, tostring(msg.muted))
+		end
 
 	elseif (msg.kind == 'error') then
 		-- The device echoes the message it rejected, which is the only useful
@@ -905,7 +940,8 @@ function RefreshMiniApps()
 	if (switcherId == nil) then return end
 
 	local count = 0
-	for input = MINIAPP_BINDING_START, MINIAPP_BINDING_END do
+	local first, last = miniAppRange()
+	for input = first, last do
 		local appProxyId = C4:GetBoundProviderDevice(switcherId, input)
 		if (appProxyId ~= nil and appProxyId ~= 0) then
 			local appDeviceId = C4:GetBoundProviderDevice(appProxyId, BINDING_PROXY)
@@ -995,7 +1031,8 @@ end
 	owns this input, read the app ID it published for us, and launch it.
 ]]
 local function selectMiniApp(input)
-	if (input < MINIAPP_BINDING_START or input > MINIAPP_BINDING_END) then
+	local first, last = miniAppRange()
+	if (input < first or input > last) then
 		dbg('SET_INPUT %s is not a mini-app input', tostring(input))
 		return
 	end
@@ -1204,11 +1241,26 @@ function ReceivedFromProxy(idBinding, strCommand, tParams)
 	-- Selecting a mini-app in Navigator. Ordered before the keymap so it still
 	-- works whether the mini-app inputs sit on this proxy or a separate switcher.
 	if (strCommand == 'SET_INPUT') then
-		selectMiniApp(tonumber(tParams.INPUT) or 0)
+		local input = tonumber(tParams.INPUT) or 0
+
+		--[[
+			On a television, SET_INPUT is also how Control4 routes another source
+			through the TV. The remote protocol has no input-switching message, so
+			this is done with the corresponding key code.
+		]]
+		local hdmi = isTelevision() and HDMI_INPUTS[input] or nil
+		if (hdmi ~= nil) then
+			local key = keycodes.KEYCODE['KEYCODE_TV_INPUT_HDMI_' .. hdmi]
+			dbg('SET_INPUT %d -> HDMI %d (%s)', input, hdmi, tostring(key))
+			if (key ~= nil) then SendKeyCode(key, keycodes.DIRECTION.SHORT) end
+			return
+		end
+
+		selectMiniApp(input)
 		return
 	end
 
-	local keyCode, direction, disposition = keymap.resolve(strCommand)
+	local keyCode, direction, disposition = keymap.resolve(strCommand, isTelevision())
 
 	if (disposition == 'mapped') then
 		dbg('proxy %s -> %s dir=%s', strCommand,
@@ -1325,7 +1377,8 @@ function Diagnostics()
 		dbg('  !! switcher proxy is not bound - no mini-app can work')
 	else
 		local found = 0
-		for input = MINIAPP_BINDING_START, MINIAPP_BINDING_END do
+		local first, last = miniAppRange()
+		for input = first, last do
 			local appProxyId = C4:GetBoundProviderDevice(switcherId, input)
 			if (appProxyId ~= nil and appProxyId ~= 0) then
 				found = found + 1

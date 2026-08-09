@@ -1,7 +1,7 @@
 <devicedata>
 	<copyright>2026</copyright>
 	<manufacturer>Google</manufacturer>
-	<name>Google TV</name>
+	<name>Google TV (Streamer)</name>
 	<model>Android TV Remote v2</model>
 	<creator>C4 Google TV project</creator>
 	<created>08/08/2026 00:00</created>
@@ -13,6 +13,17 @@
 	<config>
 		<script file="driver.lua"></script>
 		<properties>
+			<property>
+				<name>Device Type</name>
+				<type>LIST</type>
+				<items>
+					<item>Streamer</item>
+					<item>Television</item>
+				</items>
+				<default>Streamer</default>
+				<readonly>true</readonly>
+				<description>Which variant this driver is. Fixed: the proxy type is declared in driver.xml and cannot change at runtime. Use the Google TV (Television) driver for a TV with Google TV built in.</description>
+			</property>
 			<property>
 				<name>Device IP</name>
 				<default></default>

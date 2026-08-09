@@ -12,7 +12,9 @@ Full background, prior art, and milestones: [docs/BRIEF.md](docs/BRIEF.md).
 | `docs/BRIEF.md` | Original project brief — protocol background, prior art, milestones |
 | `docs/spike-01-findings.md` | Capability research + the pending go/no-go test |
 | `spikes/01_openssl_capability.lua` | Paste-into-Composer-Lua-window probe, no install needed |
-| `driver/atv/` | **The driver.** `media_player` proxy, pairing, full keymap |
+| `driver/atv/` | **Streamer/dongle driver** — `media_player` proxy |
+| `driver/atv_tv/` | **Television driver** — `tv` proxy, HDMI inputs, volume |
+| `driver/lib/driver_core.lua` | All the logic. Each `driver.lua` is a one-line shim |
 | `driver/atv_spike/` | Minimal `.c4z` that tests the mTLS handshake |
 | `driver/lib/` | Shared Lua modules, bundled into every `.c4z` under `lib/` |
 | `docs/protocol-reference.md` | Generated schema reference — field numbers, framing |
@@ -129,6 +131,36 @@ Milestones 1-4 of [docs/BRIEF.md](docs/BRIEF.md) are complete against the real d
 Reproduce any of it with `tools/send_key.py`. Note `--delay` / `--repeat`: the
 controller and the TV are usually in different rooms, and a single fire-and-check
 keypress is not a confirmation — repeat over a window you can walk to.
+
+## Two variants: streamer and television
+
+A Google TV comes as a dongle *or* built into a television, and Control4 needs a
+different proxy for each. The proxy is fixed in `driver.xml` and cannot be chosen at
+runtime, so there are two drivers sharing one `lib/driver_core.lua`. Behaviour that
+genuinely differs keys off the `Device Type` property, whose default is set per
+driver.
+
+| | `driver/atv` (Streamer) | `driver/atv_tv` (Television) |
+|---|---|---|
+| Proxy | `media_player` | `tv` |
+| Role in a room | a source feeding a display | the display itself |
+| Mini-app inputs | 3101–3125 | **3051–3075** |
+| HDMI inputs | none | 1001–1004, switched by key code |
+| Volume | not mapped (CEC owns it) | mapped, and reported |
+| Reselect Room Source | On | Off — a `tv` proxy is already in the audio path |
+
+**The mini-app range matters.** The SDK warns that on TV and receiver proxies,
+inputs above `x099` do not raise events, variable changes or conditionals — so the
+streamer's 3101–3125 would be silently broken on a `tv` proxy. The Sony Bravia in
+this project uses 3051–3065 for that reason, which is where the television range
+comes from.
+
+The remote protocol has no input-switching message, so `SET_INPUT` on a television
+is translated to `KEYCODE_TV_INPUT_HDMI_1..4`.
+
+Known target televisions: TCL `G03_4K_US / BeyondTV4 / Smart TV Pro` at
+10.200.10.26 — both ports open, TLS 1.2 and 1.3, so in-driver pairing works there
+too.
 
 ## Resilience model
 

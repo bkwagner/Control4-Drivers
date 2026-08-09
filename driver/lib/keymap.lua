@@ -7,11 +7,11 @@
 	names; unrecognised commands are passed through by the proxy, so the driver
 	must tolerate names not in this table.
 
-	VOLUME IS DELIBERATELY NOT MAPPED. On this hardware volume routes over CEC to
-	the TV or receiver, which Control4 already controls directly - the device
-	reports volume_max = 0 and has no volume state of its own. Mapping
-	START_VOL_UP / MUTE_TOGGLE here would create two things fighting over the same
-	volume. The key codes remain in lib/keycodes.lua if this is ever wanted.
+	VOLUME DEPENDS ON THE VARIANT. On a streamer, volume routes over CEC to the TV
+	or receiver, which Control4 already controls directly - the device reports
+	volume_max = 0 and has no volume of its own, so mapping volume here would put
+	two things on the same control. A television owns its volume, so the commands
+	are mapped there. resolve() takes a flag for this.
 ]]
 
 local keycodes = require('lib.keycodes')
@@ -124,6 +124,20 @@ M.COMMANDS = {
 }
 
 --[[
+	Volume, mapped only on a television. Kept separate so a streamer cannot reach
+	it by accident - including through the START_/STOP_ prefix handling below.
+]]
+M.VOLUME_COMMANDS = {
+	START_VOL_UP      = { key = K.KEYCODE_VOLUME_UP,   hold = true },
+	STOP_VOL_UP       = { key = K.KEYCODE_VOLUME_UP,   hold = true },
+	START_VOL_DOWN    = { key = K.KEYCODE_VOLUME_DOWN, hold = true },
+	STOP_VOL_DOWN     = { key = K.KEYCODE_VOLUME_DOWN, hold = true },
+	MUTE_TOGGLE       = { key = K.KEYCODE_VOLUME_MUTE },
+	MUTE_ON           = { key = K.KEYCODE_VOLUME_MUTE },
+	MUTE_OFF          = { key = K.KEYCODE_VOLUME_MUTE },
+}
+
+--[[
 	Resolve a proxy command to key code and direction.
 
 	Returns keyCode, direction, disposition where disposition is one of:
@@ -142,11 +156,18 @@ M.COMMANDS = {
 	release of a tap we have already delivered in full, so it is dropped - acting
 	on it would send a second, spurious key event.
 ]]
-function M.resolve(command)
+function M.resolve(command, withVolume)
 	if (command == nil) then return nil, nil, 'unmapped' end
 
+	local function lookup(name)
+		local e = M.COMMANDS[name]
+		if (e ~= nil) then return e end
+		if (withVolume) then return M.VOLUME_COMMANDS[name] end
+		return nil
+	end
+
 	-- Exact matches win, so the explicit START_SCAN_FWD family above still applies.
-	local entry = M.COMMANDS[command]
+	local entry = lookup(command)
 	if (entry ~= nil) then
 		if (entry.hold) then
 			if (string.sub(command, 1, 6) == 'START_') then
@@ -159,18 +180,18 @@ function M.resolve(command)
 
 	-- END_<KEY>: the tap was already delivered as a complete SHORT press.
 	local base = string.match(command, '^END_(.+)$')
-	if (base ~= nil and M.COMMANDS[base] ~= nil) then
+	if (base ~= nil and lookup(base) ~= nil) then
 		return nil, nil, 'ignored'
 	end
 
 	base = string.match(command, '^START_(.+)$')
-	if (base ~= nil and M.COMMANDS[base] ~= nil) then
-		return M.COMMANDS[base].key, D.START_LONG, 'mapped'
+	if (base ~= nil and lookup(base) ~= nil) then
+		return lookup(base).key, D.START_LONG, 'mapped'
 	end
 
 	base = string.match(command, '^STOP_(.+)$')
-	if (base ~= nil and M.COMMANDS[base] ~= nil) then
-		return M.COMMANDS[base].key, D.END_LONG, 'mapped'
+	if (base ~= nil and lookup(base) ~= nil) then
+		return lookup(base).key, D.END_LONG, 'mapped'
 	end
 
 	return nil, nil, 'unmapped'
