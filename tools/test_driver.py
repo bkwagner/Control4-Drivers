@@ -99,7 +99,7 @@ function C4:SetTimer(ms, callback, repeating)
 end
 function C4:SendWOL(mac, port) record('SendWOL', mac, port) end
 function C4:GetDeviceMAC(binding) return StubMAC end
-StubMAC = '38:18:4C:70:F5:3F'
+StubMAC = '00:1A:2B:3C:4D:5E'
 
 -- Fire the most recently scheduled live timer n times.
 function FireTimer(n)
@@ -603,7 +603,7 @@ def print_resilience_tests() -> None:
     g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
     check("handshake resets the backoff", g.Driver.reconnectAttempt, 0)
     check("MAC learned from the connection",
-          g.Prop(b"Device MAC"), b"38:18:4C:70:F5:3F")
+          g.Prop(b"Device MAC"), b"00:1A:2B:3C:4D:5E")
 
     g.Driver.ignoreOffline = False
     g.OnConnectionStatusChanged(BINDING_CONTROL, PORT_CONTROL, b"OFFLINE")
