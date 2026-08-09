@@ -218,7 +218,7 @@ def load_driver():
     lua = lupa.LuaRuntime(encoding=None)
     lua.execute(f'package.path = [[{DRIVER.as_posix()}/?.lua]] .. ";" .. package.path'.encode())
     lua.execute(LUA_STUBS)
-    lua.execute((DRIVER / "atv" / "driver.lua").read_bytes())
+    lua.execute((DRIVER / "atv" / "driver.lua").read_bytes())  # shim -> lib/driver_core
     return lua
 
 
