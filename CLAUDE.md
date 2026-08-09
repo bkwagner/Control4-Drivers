@@ -157,6 +157,40 @@ The device drops TCP whenever it sleeps, so disconnection is routine, not a faul
 - **Retrying stops** when there is no IP or no stored identity. Nothing to connect to
   is a configuration state, not a transient failure.
 
+## App launching — measured, and only partly works
+
+`RemoteAppLinkLaunchRequest` takes a bare Android package name. The mechanism is
+sound: Netflix launches reliably, end to end, from the driver.
+
+But only some apps launch. Measured against the target Chromecast on 2026-08-09,
+all with packages confirmed correct and every app visibly installed:
+
+| Launches | Bounces to the Play Store |
+|---|---|
+| `com.netflix.ninja` | `com.espn.score_center` |
+| `com.disney.disneyplus` | `com.wbd.stream` |
+| `com.hulu.livingroomplus` | `com.tubitv` |
+| `com.google.android.youtube.tv` | `com.google.android.youtube.tvunplugged` |
+| | `com.apple.atve.androidtv.appletv` |
+| | `com.peacocktv.peacockandroid` |
+
+Not a package-name problem: ESPN and HBO Max both appear in the device's own
+"Your apps" row, and the driver has seen `current_app` report `com.wbd.stream`
+and `com.espn.score_center` on this very device.
+
+Also not a format problem. For a failing app, all of these were tried and none
+launched it: bare package, `android-app://`, `market://launch?id=`, the app's own
+URI schemes, an `https://` deep link, and two `intent://` forms — while a bare
+package for Netflix launched immediately as a control in the same session.
+
+Working theory: the four that launch are the ones preloaded on a Chromecast with
+Google TV, and the remote service may only resolve launch intents for preloaded or
+system-privileged apps. Unconfirmed. If so, no driver change can help.
+
+**Practical consequence:** bind mini-apps for apps that are verified to launch.
+The minidriver's `UM_NV_SHIELD` value is passed through unchanged as the app link,
+so any working string can go there without touching the driver.
+
 ## State feedback — measured behaviour
 
 Verified against the target device on 2026-08-08 via `tools/send_key.py`.
