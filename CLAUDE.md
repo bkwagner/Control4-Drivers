@@ -178,10 +178,14 @@ The device drops TCP whenever it sleeps, so disconnection is routine, not a faul
   via `GetDeviceMAC` while connected (the ARP entry exists then) and persisted,
   because once the device sleeps the ARP entry may be gone.
 
-  ⚠️ **The target device is on Wi-Fi, so WOL cannot work for it.** Magic packets need
+  ⚠️ **Both target devices are on Wi-Fi, so WOL cannot work for either.** Magic packets need
   a NIC that stays powered and listening; Wi-Fi adapters do not. This is a limitation
   of WOL, not something the driver can route around. The code path is kept because it
   is correct for a wired device, and sending a packet that goes nowhere is harmless.
+
+  Note a device may report a different MAC than the one in its certificate — those
+  are separate interfaces, wired and wireless. A wired MAC is no help when the
+  active connection is wireless.
 
   On Wi-Fi the wake path is **Network Standby** (Settings → Network & Internet)
   instead: with it enabled the device keeps its connection alive in standby, so the
