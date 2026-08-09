@@ -664,6 +664,8 @@ def main() -> None:
 
     print("\nproxy commands")
     cases = [(b"UP", 19, 3), (b"ENTER", 23, 3), (b"CANCEL", 4, 3),
+             (b"MENU", 3, 3), (b"EXIT", 3, 3),   # both reach HOME
+
              (b"NUMBER_7", 14, 3), (b"PROGRAM_C", 185, 3),
              (b"START_SCAN_FWD", 90, 1), (b"STOP_SCAN_FWD", 90, 2)]
     for command, want_key, want_dir in cases:
