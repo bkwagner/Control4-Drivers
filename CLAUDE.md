@@ -183,25 +183,31 @@ Not a format problem. For a failing app, bare package, `android-app://`,
 `intent://` forms were all tried; none launched it, while a bare package for
 Netflix launched immediately as a control in the same session.
 
-**The three that fail cannot be launched by this protocol on this device.** Settled,
-not open:
+**The three that fail are handled by a Play Store fallback.** The device cannot
+resolve a launch intent for them and opens their Play Store page instead, with
+"Open" focused — the page shows "Open", so the package is right and the app is
+installed. Pressing OK there launches the app.
 
-- The Play Store page they land on shows **"Open"** — so the package is correct and
-  the app is installed and launchable. Not a wrong package, not a pending update.
-- Eight app_link formats were tried against them: bare package, `android-app://`,
-  `market://launch?id=`, the app's own URI schemes, an `https://` deep link, two
-  `intent://` forms, and `package/activity` component form (using the real activity
-  name read out of the Sony's app list for HBO Max). None launched.
-- Sending `KEYCODE_DPAD_CENTER` to press the store page's "Open" button does not
-  work either.
+The driver presses OK and keeps pressing until the app opens, first press after
+1.5s then every 2s, stopping the moment `current_app` becomes the app it asked for.
+Verified on hardware: ESPN 2 presses, HBO Max 2, Apple TV 3 — all within about four
+seconds.
 
-The device falls back to a store lookup for apps whose launch intent it cannot
-resolve. Nothing in the driver can change that.
+A fixed delay was tried first and was the wrong model: HBO Max needed 10s while
+ESPN failed even at 20s, because readiness is not a fixed interval. Press-and-retry
+adapts, starts as fast as a person would, and needs no tuning. Do not replace it
+with a delay.
 
-Workaround: **HBO Max and Apple TV are both installed on the Sony**, which launches
-them fine through its own driver, so bind those minidrivers to the TV rather than
-the Google TV. ESPN is the only app with no route — it is on the Chromecast only,
-and the Chromecast will not launch it.
+The fallback only fires for a store page appearing within 45s of a launch this
+driver requested, stops if the user navigates elsewhere, and gives up after 10
+presses. **If a bound app is not installed the focused button is Install, not Open,
+and pressing it starts an installation** — the `Play Store Fallback` property turns
+the behaviour off.
+
+Eight app_link formats were tried before resorting to this and none launched those
+apps: bare package, `android-app://`, `market://launch?id=`, the app's own URI
+schemes, an `https://` deep link, two `intent://` forms, and `package/activity`
+component form using the real activity name from the Sony's app list.
 
 **Practical consequence:** bind mini-apps for apps verified to launch. The
 minidriver's `UM_NV_SHIELD` value is passed through unchanged as the app link, so

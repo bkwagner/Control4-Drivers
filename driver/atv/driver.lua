@@ -118,15 +118,21 @@ local PERSIST_MAC = 'device_mac'
 	settled - an immediate press does nothing. So: if the Play Store appears shortly
 	after we asked for an app, wait, then press OK.
 
-	The delay matters and varies by app. Measured for HBO Max: 5s fails, 10s and 15s
-	both work, even though the store page reports as current_app within half a
-	second - it is visible long before it is interactive. ESPN needed longer still
-	and was not reliably reproducible, which is why the delay is a property rather
-	than a constant.
+	Timing is the awkward part. The store page reports as current_app within half a
+	second but swallows an immediate press, and how long it takes to accept one
+	varies by app - measured for HBO Max, 5s failed while 10s worked; ESPN needed
+	longer still.
+
+	So rather than guess a delay, press and keep pressing until it takes. The
+	device tells us when it worked: current_app becomes the app we asked for, and
+	the retries stop. This starts about as fast as a person would and self-corrects
+	instead of being tuned.
 ]]
-local PLAYSTORE_PACKAGE = 'com.android.vending'
-local PLAYSTORE_SETTLE_DEFAULT = 12   -- seconds; margin over the measured 10s
-local PLAYSTORE_WINDOW  = 45    -- how long a launch stays "ours" to act on
+local PLAYSTORE_PACKAGE   = 'com.android.vending'
+local PLAYSTORE_FIRST     = 1.5   -- seconds before the first press
+local PLAYSTORE_INTERVAL  = 2     -- seconds between retries
+local PLAYSTORE_ATTEMPTS  = 10    -- give up after this many presses
+local PLAYSTORE_WINDOW    = 45    -- how long a launch stays "ours" to act on
 
 --------------------------------------------------------------------------------
 -- State
@@ -154,6 +160,9 @@ Driver = {
 
 	pendingLaunch      = nil,  -- app link we asked for but have not seen open yet
 	pendingLaunchTimer = nil,
+	storeTarget        = nil,  -- app we are pressing OK for on the Play Store page
+	storeTimer         = nil,
+	storeAttempts      = 0,
 }
 
 --------------------------------------------------------------------------------
@@ -457,6 +466,47 @@ local function send(binding, port, data)
 end
 
 --[[
+	Press OK on the Play Store page until the app actually opens.
+
+	There is no way to ask the device whether the page is ready, so this presses,
+	watches, and presses again. current_app turning into the app we wanted is the
+	success signal and stops the loop; anything else in the foreground means the
+	user has moved on and it stops too.
+]]
+function StopStoreFallback()
+	Driver.storeTimer = cancelTimer(Driver.storeTimer)
+	Driver.storeTarget = nil
+	Driver.storeAttempts = 0
+end
+
+function StartStoreFallback(wanted)
+	StopStoreFallback()
+	Driver.storeTarget = wanted
+	dbg('Play Store opened for %q; pressing OK until it takes', wanted)
+
+	local function press()
+		if (Driver.storeTarget == nil) then return end
+
+		Driver.storeAttempts = Driver.storeAttempts + 1
+		if (Driver.storeAttempts > PLAYSTORE_ATTEMPTS) then
+			dbg('Play Store fallback gave up after %d presses', PLAYSTORE_ATTEMPTS)
+			StopStoreFallback()
+			return
+		end
+
+		dbg('Play Store fallback: OK press %d', Driver.storeAttempts)
+		SendKeyCode(keycodes.KEYCODE.KEYCODE_DPAD_CENTER, keycodes.DIRECTION.SHORT)
+	end
+
+	-- First press quickly, as a person would, then keep trying.
+	Driver.storeTimer = C4:SetTimer(PLAYSTORE_FIRST * 1000, function()
+		press()
+		if (Driver.storeTarget == nil) then return end
+		Driver.storeTimer = C4:SetTimer(PLAYSTORE_INTERVAL * 1000, press, true)
+	end)
+end
+
+--[[
 	Handle one decoded message from the control connection.
 
 	The server drives: it configures us, then activates, then reports state. We
@@ -496,30 +546,29 @@ local function handleControlMessage(msg)
 		C4:UpdateProperty('Current App', package)
 		dbg('current app: %s', package)
 
-		if (package == Driver.pendingLaunch) then
+		if (package == Driver.storeTarget) then
+			dbg('Play Store fallback succeeded after %d press(es)', Driver.storeAttempts)
+			StopStoreFallback()
+			Driver.pendingLaunch = nil
+
+		elseif (package == Driver.pendingLaunch) then
 			-- It opened on its own; nothing more to do.
 			Driver.pendingLaunch = nil
 
 		elseif (package == PLAYSTORE_PACKAGE and Driver.pendingLaunch ~= nil) then
-			--[[
-				The device could not resolve a launch intent and opened the store
-				page instead. Pressing OK there launches the app, but only after the
-				page settles - an immediate press is swallowed.
-			]]
+			-- The device could not resolve a launch intent and opened the store page.
 			local wanted = Driver.pendingLaunch
+			Driver.pendingLaunch = nil
 			if ((Properties['Play Store Fallback'] or 'On') ~= 'On') then
 				dbg('Play Store opened for %q; fallback disabled', wanted)
-				Driver.pendingLaunch = nil
 			else
-				local settle = tonumber(Properties['Play Store Fallback Delay'])
-					or PLAYSTORE_SETTLE_DEFAULT
-				dbg('Play Store opened for %q; pressing OK in %ds', wanted, settle)
-				Driver.pendingLaunch = nil
-				C4:SetTimer(settle * 1000, function()
-					SendKeyCode(keycodes.KEYCODE.KEYCODE_DPAD_CENTER,
-						keycodes.DIRECTION.SHORT)
-				end)
+				StartStoreFallback(wanted)
 			end
+
+		elseif (Driver.storeTarget ~= nil and package ~= PLAYSTORE_PACKAGE) then
+			-- Somewhere else entirely: the user navigated away, so stop pressing.
+			dbg('Play Store fallback abandoned; foreground is now %s', package)
+			StopStoreFallback()
 		end
 
 	elseif (msg.kind == 'volume') then

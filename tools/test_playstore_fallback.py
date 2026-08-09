@@ -75,24 +75,27 @@ async def main_async(args: argparse.Namespace) -> int:
         remote.disconnect()
         return 1
 
-    print(f"  waiting {args.settle}s for the page to settle")
-    await asyncio.sleep(args.settle)
+    # Press, watch, press again - exactly what the driver does. There is no way to
+    # ask the device whether the page is ready, so this is the adaptive equivalent.
+    print(f"  first press in {args.first}s, then every {args.interval}s")
+    await asyncio.sleep(args.first)
 
-    print("  pressing OK")
-    remote.send_key_command("KEYCODE_DPAD_CENTER")
+    for attempt in range(1, args.attempts + 1):
+        print(f"  OK press {attempt}")
+        remote.send_key_command("KEYCODE_DPAD_CENTER")
 
-    for tick in range(args.timeout * 2):
-        await asyncio.sleep(0.5)
-        if remote.current_app == args.package:
-            print(f"\nSUCCESS: {args.package} launched "
-                  f"{tick / 2:.1f}s after the OK press")
-            print(f"  app trail: {seen}")
-            remote.disconnect()
-            return 0
+        for _ in range(int(args.interval * 2)):
+            await asyncio.sleep(0.5)
+            if remote.current_app == args.package:
+                print()
+                print(f"SUCCESS: {args.package} launched after {attempt} press(es)")
+                print(f"  app trail: {seen}")
+                remote.disconnect()
+                return 0
 
-    print(f"\nFAILED: still at {remote.current_app!r} after {args.timeout}s")
+    print()
+    print(f"FAILED: still at {remote.current_app!r} after {args.attempts} presses")
     print(f"  app trail: {seen}")
-    print("  try a longer --settle")
     remote.disconnect()
     return 1
 
@@ -102,8 +105,12 @@ def main() -> None:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("host")
     ap.add_argument("package")
-    ap.add_argument("--settle", type=float, default=5.0,
-                    help="seconds to wait after the store appears (default: 5)")
+    ap.add_argument("--first", type=float, default=1.5,
+                    help="seconds before the first OK press (default: 1.5)")
+    ap.add_argument("--interval", type=float, default=2.0,
+                    help="seconds between retries (default: 2)")
+    ap.add_argument("--attempts", type=int, default=10,
+                    help="give up after this many presses (default: 10)")
     ap.add_argument("--timeout", type=int, default=20)
     ap.add_argument("--cert-dir", type=Path, default=Path("certs"))
     sys.exit(asyncio.run(main_async(ap.parse_args())))

@@ -318,7 +318,8 @@ def print_miniapp_tests(lua, g) -> None:
 
 def print_playstore_tests() -> None:
     """Some apps cannot be launched directly; the device opens their Play Store page
-    with Open focused, and pressing OK there launches them - but only after a delay."""
+    with Open focused. There is no way to ask whether that page is ready, so the
+    driver presses OK repeatedly until the app opens."""
     print()
     print("Play Store fallback")
 
@@ -339,37 +340,71 @@ def print_playstore_tests() -> None:
         m.remote_ime_key_inject.app_info.app_package = package
         g.ReceivedFromNetwork(BINDING_CONTROL, PORT_CONTROL, framed(m))
 
-    def sent_key(g):
-        data = g.SentData(1)
-        if data is None:
-            return None
-        msg = RemoteMessage()
-        msg.ParseFromString(data[1:])
-        return msg.remote_key_inject.key_code
+    def keys_sent(g):
+        out = []
+        for i in range(1, g.SentCount() + 1):
+            msg = RemoteMessage()
+            msg.ParseFromString(g.SentData(i)[1:])
+            if msg.HasField("remote_key_inject"):
+                out.append(msg.remote_key_inject.key_code)
+        return out
 
-    # The store opening after our launch triggers a delayed OK press.
+    OK = 23  # KEYCODE_DPAD_CENTER
+
+    # Store page after our launch: press, and keep pressing.
     lua, g = fresh()
     g.LaunchApp(b"com.wbd.stream")
     g.ClearSent()
     current_app(g, "com.android.vending")
-    check("no key pressed before the delay elapses", g.SentCount(), 0)
-    g.FireTimerMs(12 * 1000)
-    check("presses OK after the settle delay", sent_key(g), 23)   # KEYCODE_DPAD_CENTER
+    check("nothing pressed immediately", g.SentCount(), 0)
 
-    # An app that launches normally must not get a spurious press.
+    g.FireTimerMs(1500)                      # first press
+    check("first press is prompt", keys_sent(g), [OK])
+    for _ in range(3):
+        g.FireTimerMs(2000)                  # retries
+    check("keeps pressing until it takes", keys_sent(g), [OK, OK, OK, OK])
+
+    # The app opening stops the retries - that is the only success signal we get.
+    current_app(g, "com.wbd.stream")
+    g.ClearSent()
+    g.FireTimerMs(2000)
+    check("stops once the app opens", g.SentCount(), 0)
+
+    # It gives up rather than pressing forever.
+    lua, g = fresh()
+    g.LaunchApp(b"com.wbd.stream")
+    g.ClearSent()
+    current_app(g, "com.android.vending")
+    g.FireTimerMs(1500)
+    for _ in range(20):
+        g.FireTimerMs(2000)
+    check("gives up after 10 presses", len(keys_sent(g)), 10)
+
+    # Navigating elsewhere stops it.
+    lua, g = fresh()
+    g.LaunchApp(b"com.wbd.stream")
+    g.ClearSent()
+    current_app(g, "com.android.vending")
+    g.FireTimerMs(1500)
+    current_app(g, "com.google.android.apps.tv.launcherx")
+    g.ClearSent()
+    g.FireTimerMs(2000)
+    check("stops if the user navigates away", g.SentCount(), 0)
+
+    # An app that launches normally must not be pressed at.
     lua, g = fresh()
     g.LaunchApp(b"com.netflix.ninja")
     g.ClearSent()
     current_app(g, "com.netflix.ninja")
-    check("no fallback when the app launches directly", g.TimerCount() > 0 and
-          g.FireTimerMs(12 * 1000) is not True, True)
-    check("nothing sent for a direct launch", g.SentCount(), 0)
+    g.FireTimerMs(1500)
+    check("no press for a direct launch", g.SentCount(), 0)
 
-    # The user opening the Play Store themselves must not trigger a press.
+    # The user browsing the store on their own is left alone.
     lua, g = fresh()
     g.ClearSent()
     current_app(g, "com.android.vending")
-    check("no fallback without a pending launch", g.SentCount(), 0)
+    g.FireTimerMs(1500)
+    check("no press without a pending launch", g.SentCount(), 0)
 
     # Opt-out.
     lua, g = fresh()
@@ -377,17 +412,8 @@ def print_playstore_tests() -> None:
     g.LaunchApp(b"com.wbd.stream")
     g.ClearSent()
     current_app(g, "com.android.vending")
-    g.FireTimerMs(12 * 1000)
-    check("no press when the fallback is disabled", g.SentCount(), 0)
-
-    # The delay is configurable, because it varies by app.
-    lua, g = fresh()
-    g.Properties[b"Play Store Fallback Delay"] = 25
-    g.LaunchApp(b"com.wbd.stream")
-    g.ClearSent()
-    current_app(g, "com.android.vending")
-    check("honours a custom delay", g.FireTimerMs(25 * 1000), True)
-    check("custom delay presses OK", sent_key(g), 23)
+    g.FireTimerMs(1500)
+    check("no press when disabled", g.SentCount(), 0)
 
 
 def print_resilience_tests() -> None:

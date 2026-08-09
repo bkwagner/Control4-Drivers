@@ -78,16 +78,7 @@
 				</items>
 				<default>On</default>
 				<readonly>false</readonly>
-				<description>Some apps cannot be launched directly on this hardware; the device opens their Play Store page instead. With this On, the driver presses OK on that page, which launches the app. CAUTION: if the app is NOT installed the focused button is Install rather than Open, and this will begin an installation. Set to Off to never press.</description>
-			</property>
-			<property>
-				<name>Play Store Fallback Delay</name>
-				<minimum>3</minimum>
-				<maximum>40</maximum>
-				<default>12</default>
-				<type>RANGED_INTEGER</type>
-				<readonly>false</readonly>
-				<description>Seconds to wait before pressing OK on the Play Store page. The page reports as the current app within half a second but is not interactive for much longer. Measured for HBO Max: 5s fails, 10s works. Raise this if an app still fails to launch.</description>
+				<description>Some apps cannot be launched directly on this hardware; the device opens their Play Store page instead. With this On, the driver presses OK on that page, which launches the app. CAUTION: if the app is NOT installed the focused button is Install rather than Open, and this will begin an installation. It presses repeatedly until the app opens, then stops. Set to Off to never press.</description>
 			</property>
 			<property>
 				<name>Debug Mode</name>
