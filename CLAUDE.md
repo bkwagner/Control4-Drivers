@@ -183,12 +183,25 @@ Not a format problem. For a failing app, bare package, `android-app://`,
 `intent://` forms were all tried; none launched it, while a bare package for
 Netflix launched immediately as a control in the same session.
 
-The three that fail are unexplained. ESPN and HBO Max both appear in the device's
-"Your apps" row, and the driver has seen `current_app` report `com.espn.score_center`
-and `com.wbd.stream` on this device — so the packages are right and the apps are
-installed. What the Play Store page shows for them ("Open", "Update", or "item not
-found") would discriminate between a wrong package, a pending update intercepting
-the launch, and a launch-intent problem. Not yet checked.
+**The three that fail cannot be launched by this protocol on this device.** Settled,
+not open:
+
+- The Play Store page they land on shows **"Open"** — so the package is correct and
+  the app is installed and launchable. Not a wrong package, not a pending update.
+- Eight app_link formats were tried against them: bare package, `android-app://`,
+  `market://launch?id=`, the app's own URI schemes, an `https://` deep link, two
+  `intent://` forms, and `package/activity` component form (using the real activity
+  name read out of the Sony's app list for HBO Max). None launched.
+- Sending `KEYCODE_DPAD_CENTER` to press the store page's "Open" button does not
+  work either.
+
+The device falls back to a store lookup for apps whose launch intent it cannot
+resolve. Nothing in the driver can change that.
+
+Workaround: **HBO Max and Apple TV are both installed on the Sony**, which launches
+them fine through its own driver, so bind those minidrivers to the TV rather than
+the Google TV. ESPN is the only app with no route — it is on the Chromecast only,
+and the Chromecast will not launch it.
 
 **Practical consequence:** bind mini-apps for apps verified to launch. The
 minidriver's `UM_NV_SHIELD` value is passed through unchanged as the app link, so
