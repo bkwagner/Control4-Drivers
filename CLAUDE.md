@@ -157,7 +157,13 @@ driver.
 | Role in a room | a source feeding a display | the display itself |
 | Mini-app inputs | 3101–3125 | **3051–3075** |
 | HDMI inputs | none | 1001–1004, switched by key code |
-| Volume | not mapped (CEC owns it) | mapped, and reported |
+| Volume | not mapped (CEC owns it) | `PULSE_VOL_UP`/`DOWN`, and reported |
+
+**A `tv` proxy sends `PULSE_VOL_UP` / `PULSE_VOL_DOWN`**, not the `START_VOL_`/`STOP_VOL_`
+pair in the documented command list — measured on hardware, and what the Roku TV driver
+handles. It also polls `GET_VOLUME_LEVEL`, which cannot be answered through this
+protocol; the Roku driver ignores it too, so it is recognised and dropped rather than
+logged as unmapped.
 | Reselect Room Source | On | Off — a `tv` proxy is already in the audio path |
 
 **A `tv` proxy needs capabilities and a room binding, or Navigator ignores it.**

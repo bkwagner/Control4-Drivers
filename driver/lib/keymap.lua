@@ -128,6 +128,15 @@ M.COMMANDS = {
 	it by accident - including through the START_/STOP_ prefix handling below.
 ]]
 M.VOLUME_COMMANDS = {
+	--[[
+		PULSE_VOL_UP / PULSE_VOL_DOWN are what a tv proxy actually sends - measured
+		on hardware, and what the Roku TV driver handles. Each is one press, not a
+		press-and-hold pair. The START_/STOP_ forms below are kept because the
+		documented command list contains them, but they were never observed.
+	]]
+	PULSE_VOL_UP      = { key = K.KEYCODE_VOLUME_UP },
+	PULSE_VOL_DOWN    = { key = K.KEYCODE_VOLUME_DOWN },
+
 	START_VOL_UP      = { key = K.KEYCODE_VOLUME_UP,   hold = true },
 	STOP_VOL_UP       = { key = K.KEYCODE_VOLUME_UP,   hold = true },
 	START_VOL_DOWN    = { key = K.KEYCODE_VOLUME_DOWN, hold = true },
@@ -176,6 +185,17 @@ function M.resolve(command, withVolume)
 			return entry.key, D.END_LONG, 'mapped'
 		end
 		return entry.key, D.SHORT, 'mapped'
+	end
+
+	--[[
+		Recognised and deliberately ignored. GET_VOLUME_LEVEL arrives whenever the
+		room queries volume; there is no way to answer it through this protocol, the
+		Roku TV driver ignores it as well, and the current level is published to the
+		Volume Level property instead.
+	]]
+	if (command == 'GET_VOLUME_LEVEL' or command == 'VOLUME_IS_LINKED'
+		or command == 'MUTE_IS_LINKED') then
+		return nil, nil, 'ignored'
 	end
 
 	-- END_<KEY>: the tap was already delivered as a complete SHORT press.

@@ -546,7 +546,8 @@ def print_television_tests() -> None:
     check("streamer does not switch HDMI inputs", g.SentCount(), 0)
 
     # Volume is mapped on a television and deliberately not on a streamer.
-    for command, want in [(b"START_VOL_UP", 24), (b"STOP_VOL_DOWN", 25),
+    for command, want in [(b"PULSE_VOL_UP", 24), (b"PULSE_VOL_DOWN", 25),
+                          (b"START_VOL_UP", 24), (b"STOP_VOL_DOWN", 25),
                           (b"MUTE_TOGGLE", 164)]:
         lua, g = tv()
         g.ClearSent()
@@ -555,9 +556,17 @@ def print_television_tests() -> None:
 
     lua, g = tv()
     g.Properties[b"Device Type"] = b"Streamer"
-    g.ClearSent()
-    g.ReceivedFromProxy(BINDING_PROXY, b"START_VOL_UP", lua.table())
-    check("streamer still ignores volume", g.SentCount(), 0)
+    for command in (b"START_VOL_UP", b"PULSE_VOL_UP"):
+        g.ClearSent()
+        g.ReceivedFromProxy(BINDING_PROXY, command, lua.table())
+        check(f"streamer still ignores {command.decode()}", g.SentCount(), 0)
+
+    # Volume queries are recognised so they stop being logged as unmapped.
+    lua, g = tv()
+    for command in (b"GET_VOLUME_LEVEL", b"VOLUME_IS_LINKED", b"MUTE_IS_LINKED"):
+        g.ClearSent()
+        g.ReceivedFromProxy(BINDING_PROXY, command, lua.table())
+        check(f"{command.decode():<17} ignored quietly", g.SentCount(), 0)
 
     # A television reports real volume; a streamer reports max=0 and is ignored.
     lua, g = tv()
