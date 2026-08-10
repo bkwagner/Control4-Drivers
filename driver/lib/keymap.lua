@@ -101,14 +101,12 @@ M.COMMANDS = {
 	-- Room selection and power.
 	--
 	-- ON / SELECT_SOURCE arrive when the device is picked as a room's source, and
-	-- OFF / ROOM_OFF when the room shuts down. These use WAKEUP and SLEEP rather
-	-- than KEYCODE_POWER deliberately: POWER toggles, and on this hardware it can
-	-- propagate to the TV over CEC, which Control4 is already controlling. WAKEUP
-	-- and SLEEP affect only the streamer.
-	ON                = { key = K.KEYCODE_WAKEUP },
-	SELECT_SOURCE     = { key = K.KEYCODE_WAKEUP },
-	OFF               = { key = K.KEYCODE_SLEEP },
-	ROOM_OFF          = { key = K.KEYCODE_SLEEP },
+	--[[
+		ON / OFF / ROOM_OFF / SELECT_SOURCE are deliberately NOT here. They need
+		the device's reported power state, because the only key it responds to is
+		KEYCODE_POWER and that toggles - see PowerOn/PowerOff in driver_core.
+		WAKEUP and SLEEP were mapped here originally and are inert on the hardware.
+	]]
 
 	-- Misc. POWER stays a real toggle: pressing it is explicit user intent, unlike
 	-- the room-driven commands above.

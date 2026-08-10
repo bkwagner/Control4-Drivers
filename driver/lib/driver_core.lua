@@ -799,14 +799,29 @@ function WakeDevice()
 end
 
 --[[
-	Discrete power on. Tries both routes: a WOL packet for a device that is too
-	asleep for TCP, and a WAKEUP key for one that is merely idle. Sending both is
-	harmless - waking an awake device does nothing.
+	Discrete power on.
+
+	KEYCODE_POWER, not KEYCODE_WAKEUP. Measured on both devices 2026-08-09:
+	WAKEUP and SLEEP do nothing at all - the device acknowledges them and its
+	reported power state never changes. Only POWER moves it, in either direction.
+	This is also what the reference implementation (androidtvremote2, and Home
+	Assistant on top of it) does.
+
+	POWER toggles, so it is gated on the device's own reported state: sending it
+	to a device that is already on would turn it off. 'Power State' is updated
+	from the device, not guessed, so the gate is trustworthy.
+
+	WOL still goes out first, for a device too asleep for TCP.
 ]]
 function PowerOn()
 	WakeDevice()
 	if (Driver.connected) then
-		SendKeyCode(keycodes.KEYCODE.KEYCODE_WAKEUP, keycodes.DIRECTION.SHORT)
+		if (Properties['Power State'] == 'On') then
+			dbg('power on requested but device already reports On - not toggling')
+			setStatus('Already on')
+			return
+		end
+		SendKeyCode(keycodes.KEYCODE.KEYCODE_POWER, keycodes.DIRECTION.SHORT)
 	else
 		-- Not connected: WOL is the only route, so retry the connection promptly
 		-- rather than waiting out the current backoff.
@@ -817,15 +832,20 @@ function PowerOn()
 end
 
 --[[
-	Discrete power off. Uses SLEEP rather than POWER: POWER toggles, and on this
-	hardware it can reach the TV over CEC, which Control4 controls separately.
+	Discrete power off. KEYCODE_POWER for the reasons in PowerOn, gated the same
+	way so an already-off device is not toggled back on.
 ]]
 function PowerOff()
 	if (not Driver.connected) then
 		dbg('power off requested but not connected')
 		return
 	end
-	SendKeyCode(keycodes.KEYCODE.KEYCODE_SLEEP, keycodes.DIRECTION.SHORT)
+	if (Properties['Power State'] == 'Off') then
+		dbg('power off requested but device already reports Off - not toggling')
+		setStatus('Already off')
+		return
+	end
+	SendKeyCode(keycodes.KEYCODE.KEYCODE_POWER, keycodes.DIRECTION.SHORT)
 	setStatus('Power off requested')
 end
 
@@ -1284,6 +1304,22 @@ function ReceivedFromProxy(idBinding, strCommand, tParams)
 		end
 
 		selectMiniApp(input)
+		return
+	end
+
+	--[[
+		Power is state-dependent, so it cannot be a plain keymap entry: the device
+		only responds to KEYCODE_POWER, which toggles. Route these through the
+		gated helpers instead. SELECT_SOURCE means "make me watchable", so it wakes
+		a sleeping device and does nothing to an awake one.
+	]]
+	if (strCommand == 'ON' or strCommand == 'SELECT_SOURCE') then
+		dbg('proxy %s -> power on', strCommand)
+		PowerOn()
+		return
+	elseif (strCommand == 'OFF' or strCommand == 'ROOM_OFF') then
+		dbg('proxy %s -> power off', strCommand)
+		PowerOff()
 		return
 	end
 

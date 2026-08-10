@@ -819,20 +819,51 @@ def main() -> None:
               (msg.remote_key_inject.key_code, msg.remote_key_inject.direction),
               (want_key, want_dir))
 
-    # Room selection should wake the streamer, not toggle power (CEC would reach
-    # the TV, which Control4 already controls).
-    for command, want_key in [(b"ON", 224), (b"SELECT_SOURCE", 224),
-                              (b"OFF", 223), (b"ROOM_OFF", 223)]:
+    #[[
+    #   Power is KEYCODE_POWER (26) in both directions - WAKEUP/SLEEP are inert on
+    #   the hardware. POWER toggles, so it must only be sent when the device's own
+    #   reported state says it will move things the intended way.
+    #]]
+    POWER = 26
+    for command, state in [(b"OFF", b"On"), (b"ROOM_OFF", b"On")]:
+        g.Properties[b"Power State"] = state
         g.ClearSent()
         g.ReceivedFromProxy(BINDING_PROXY, command, lua.table())
         data = g.SentData(1)
         if data is None:
-            check(f"{command.decode()} sent", "nothing", f"key {want_key}")
+            check(f"{command.decode()} sent", "nothing", f"key {POWER}")
             continue
         msg = RemoteMessage()
         msg.ParseFromString(data[1:])
-        check(f"{command.decode():<15} -> key {want_key}",
-              msg.remote_key_inject.key_code, want_key)
+        check(f"{command.decode():<15} while On  -> POWER",
+              msg.remote_key_inject.key_code, POWER)
+
+    for command, state in [(b"ON", b"Off"), (b"SELECT_SOURCE", b"Off")]:
+        g.Properties[b"Power State"] = state
+        g.ClearSent()
+        g.ReceivedFromProxy(BINDING_PROXY, command, lua.table())
+        data = g.SentData(1)
+        if data is None:
+            check(f"{command.decode()} sent", "nothing", f"key {POWER}")
+            continue
+        msg = RemoteMessage()
+        msg.ParseFromString(data[1:])
+        check(f"{command.decode():<15} while Off -> POWER",
+              msg.remote_key_inject.key_code, POWER)
+
+    # The gate is the whole point: toggling an already-off device would turn it on.
+    g.Properties[b"Power State"] = b"Off"
+    g.ClearSent()
+    g.ReceivedFromProxy(BINDING_PROXY, b"OFF", lua.table())
+    check("OFF while already Off sends nothing", g.SentCount(), 0)
+
+    g.Properties[b"Power State"] = b"On"
+    g.ClearSent()
+    g.ReceivedFromProxy(BINDING_PROXY, b"ON", lua.table())
+    check("ON while already On sends nothing", g.SentCount(), 0)
+    g.ClearSent()
+    g.ReceivedFromProxy(BINDING_PROXY, b"SELECT_SOURCE", lua.table())
+    check("SELECT_SOURCE while On sends nothing", g.SentCount(), 0)
 
     # Volume must not be mapped - Control4 owns it over CEC.
     for command in (b"START_VOL_UP", b"MUTE_TOGGLE", b"STOP_VOL_DOWN", b"END_VOL_UP"):

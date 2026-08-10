@@ -195,6 +195,31 @@ the handling is not over-fitted to one device), connected, and reported
 `volume: level=17 max=100`. **A television does report real volume**, unlike the
 streamer's `max=0` — which is what the variant split was for.
 
+## Power — only KEYCODE_POWER works, and it toggles
+
+Measured on both devices 2026-08-09 with `is_on` as the arbiter:
+
+| Key | Chromecast | TCL television |
+|---|---|---|
+| `KEYCODE_SLEEP` | no effect | no effect |
+| `KEYCODE_WAKEUP` | no effect, **including from off** | no effect |
+| `KEYCODE_POWER` | toggles both ways | toggles both ways |
+
+The driver originally mapped `ON`→`WAKEUP` and `OFF`→`SLEEP`, on the reasoning that
+`POWER` toggles and could reach the TV over CEC. That reasoning was never measured and
+is wrong: both keys are inert. The device acknowledges them and its reported power
+state never moves. This is also what the reference implementation does — `androidtvremote2`
+and Home Assistant both send `POWER` gated on `is_on`.
+
+So power cannot be a keymap entry, because the only key that works is a toggle and the
+correct action depends on current state. `ON`/`SELECT_SOURCE`/`OFF`/`ROOM_OFF` route
+through `PowerOn()`/`PowerOff()`, which send `KEYCODE_POWER` only when the device's
+**own reported** `Power State` says the toggle will move it the intended way. Sending
+`OFF` to an already-off device would otherwise turn it on.
+
+Note the consequence for waking: since `WAKEUP` is inert, a sleeping device is woken by
+`POWER` over the existing session, which is what Network Standby keeps alive.
+
 ## Resilience model
 
 The device drops TCP whenever it sleeps, so disconnection is routine, not a fault.
