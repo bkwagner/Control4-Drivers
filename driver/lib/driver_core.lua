@@ -172,6 +172,7 @@ Driver = {
 	silentTicks     = 0,    -- watchdog ticks with no inbound traffic
 	mac             = nil,  -- learned from the connection, used for Wake-on-LAN
 
+	defaultInput       = nil,  -- which input the television returns to
 	pendingLaunch      = nil,  -- app link we asked for but have not seen open yet
 	pendingLaunchTimer = nil,
 	storeTarget        = nil,  -- app we are pressing OK for on the Play Store page
@@ -1240,6 +1241,32 @@ function ReceivedFromProxy(idBinding, strCommand, tParams)
 
 	-- Selecting a mini-app in Navigator. Ordered before the keymap so it still
 	-- works whether the mini-app inputs sit on this proxy or a separate switcher.
+	--[[
+		Director logs "TV device may be reselected due to unhanded command
+		GET_DEFAULT_INPUT / SET_DEFAULT_INPUT" when a tv proxy ignores these, and
+		warns that it may reselect the device as a result. Neither the Roku TV nor
+		the Sony driver handles them and both work, so this is not known to be
+		load-bearing - but answering costs nothing and removes a real error from the
+		log.
+
+		The default input is which input the television should return to. There is
+		no SDK documentation for the exchange, so the reply mirrors the request.
+	]]
+	if (strCommand == 'SET_DEFAULT_INPUT') then
+		Driver.defaultInput = tonumber(tParams.INPUT) or Driver.defaultInput
+		dbg('default input set to %s', tostring(Driver.defaultInput))
+		return
+	end
+
+	if (strCommand == 'GET_DEFAULT_INPUT') then
+		local input = Driver.defaultInput or 0
+		dbg('default input requested; replying %s', tostring(input))
+		pcall(function()
+			C4:SendToProxy(BINDING_PROXY, 'DEFAULT_INPUT', { INPUT = input }, 'NOTIFY')
+		end)
+		return
+	end
+
 	if (strCommand == 'SET_INPUT') then
 		local input = tonumber(tParams.INPUT) or 0
 

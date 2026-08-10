@@ -148,6 +148,7 @@ function C4:UnregisterVariableListener(...) end
 function C4:GetDevicesByC4iName(...) return {} end
 function C4:GetDeviceVariable(...) return '0' end
 function C4:SendToDevice(...) record('SendToDevice', ...) end
+function C4:SendToProxy(...) record('SendToProxy', ...) end
 
 -- Mini-app binding chain, configurable per test:
 --   switcher proxy 5999 -> device 200
@@ -520,6 +521,16 @@ def print_television_tests() -> None:
         g.ClearSent()
         g.ReceivedFromProxy(BINDING_PROXY, b"SET_INPUT", params)
         check(f"SET_INPUT {input_id} -> {label}", key_sent(g), want_key)
+
+    # Director warns "TV device may be reselected" when these go unhandled.
+    lua, g = tv()
+    params = lua.table()
+    params[b"INPUT"] = 1002
+    g.ReceivedFromProxy(BINDING_PROXY, b"SET_DEFAULT_INPUT", params)
+    check("stores the default input", g.Driver.defaultInput, 1002)
+    g.ClearSent()
+    g.ReceivedFromProxy(BINDING_PROXY, b"GET_DEFAULT_INPUT", lua.table())
+    check("answers the default input without sending a key", g.SentCount(), 0)
 
     # A streamer has no HDMI inputs; the same id is treated as a mini-app input.
     lua, g = load_driver(), None
