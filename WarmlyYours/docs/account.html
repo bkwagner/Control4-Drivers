@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WarmlyYours (OJ Cloud)</title>
+<style>
+body { font-family: "Segoe UI", Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5;
+       color: #1f2328; background: #ffffff; max-width: 820px; margin: 0 auto; padding: 16px 24px; }
+h1 { color: #c8102e; font-size: 24px; border-bottom: 2px solid #c8102e; padding-bottom: 4px; }
+h2 { color: #c8102e; font-size: 18px; margin-top: 28px; border-bottom: 1px solid #d0d7de; padding-bottom: 2px; }
+h3 { font-size: 15px; margin: 18px 0 4px; }
+code { background: #f0f2f4; padding: 1px 4px; border-radius: 3px; font-size: 13px; }
+.note { background: #fff8e5; border-left: 4px solid #d4a72c; padding: 8px 12px; margin: 12px 0; }
+.warn { background: #ffebe9; border-left: 4px solid #cf222e; padding: 8px 12px; margin: 12px 0; }
+table { border-collapse: collapse; margin: 8px 0; }
+td, th { border: 1px solid #d0d7de; padding: 4px 10px; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+.small { font-size: 12px; color: #59636e; }
+</style>
+</head>
+<body>
+
+<h1>WarmlyYours (OJ Cloud)</h1>
+
+<p>Connects Control4 to WarmlyYours Wi-Fi floor-heating thermostats through the OJ Microline
+cloud at <code>mythermostat.info</code>, the same account the <b>OJ Microline</b> phone app uses.
+This is the account driver: it signs in, finds every thermostat on the account, and keeps them
+updated. Each thermostat then appears in Control4 through a <b>WarmlyYours Thermostat (OJ Cloud)</b>
+driver.</p>
+
+<p>It replaces the annex4 WarmlyYours nSpire drivers. Those depended on annex4's own relay
+service for live updates, and that service no longer exists, so their temperatures went stale.
+This driver talks to the thermostat cloud directly.</p>
+
+<div class="note">Not affiliated with or endorsed by WarmlyYours, OJ Electronics or Control4.</div>
+
+<h2>Requirements</h2>
+<ul>
+  <li>Control4 OS 3.3.0 or later, with internet access from the controller.</li>
+  <li>The thermostats set up in the OJ Microline app. To confirm the account works, sign in at
+      <code>https://mythermostat.info</code> with the same email and password.</li>
+</ul>
+
+<h2>Setup</h2>
+<ol>
+  <li>Add <b>WarmlyYours (OJ Cloud)</b> to the project. Only one is needed per account.</li>
+  <li>Enter the account <b>Email</b> and <b>Password</b>. Within a few seconds
+      <b>Login Status</b> should read <code>Logged In</code> and <b>Driver Status</b> should show
+      how many thermostats were found.</li>
+  <li>For each thermostat, add a <b>WarmlyYours Thermostat (OJ Cloud)</b> driver to its room.</li>
+  <li>On the Connections tab, bind each thermostat connection on this driver (named after the
+      room set in the app) to a <b>WarmlyYours Thermostat (OJ Cloud)</b> driver.</li>
+</ol>
+
+<h2>How updates work</h2>
+<ul>
+  <li>The driver keeps a notification request open to the cloud, so setpoint and mode changes
+      made in the app or at the thermostat show in Control4 within seconds.</li>
+  <li>The thermostat reports its floor temperature to the cloud about once a minute, so that is
+      how often the temperature in Control4 moves.</li>
+  <li>Changes made in Control4 are sent to the cloud and retried until the cloud confirms them.
+      The cloud can take several seconds to apply a change.</li>
+</ul>
+
+<h2>Properties</h2>
+<table>
+  <tr><th>Property</th><th>Description</th></tr>
+  <tr><td>Email</td><td>The mythermostat.info / OJ Microline app account email.</td></tr>
+  <tr><td>Password</td><td>The account password.</td></tr>
+  <tr><td>Login Status</td><td>Read-only. <code>Logged In</code>, or the reason sign-in failed.</td></tr>
+  <tr><td>Driver Status</td><td>Read-only. Connection state and number of thermostats.</td></tr>
+  <tr><td>Driver Version</td><td>Read-only. Upstream release this build is based on.</td></tr>
+  <tr><td>Log Level</td><td>Detail of logging. Default <code>3 - Info</code>.</td></tr>
+  <tr><td>Log Mode</td><td>Where logs go: <code>Off</code>, <code>Print</code> (Lua output window),
+      <code>Log</code> or both. Turns itself off after 3 hours.</td></tr>
+</table>
+
+<h2>Actions</h2>
+<h3>Refresh Thermostats</h3>
+<p>Re-reads the account. Use this after adding a thermostat in the app.</p>
+<h3>Reconnect</h3>
+<p>Signs out and back in without touching bindings or programming. Use this if the driver looks
+stuck.</p>
+<h3>Reset Driver</h3>
+<div class="warn">Removes every thermostat connection, which deletes their bindings and any
+programming that uses them.</div>
+<p>Signs out and rediscovers from scratch. Only needed if thermostats were removed or renamed.</p>
+
+<h2>Troubleshooting</h2>
+<ul>
+  <li><b>Login fails:</b> sign in at <code>https://mythermostat.info</code> with the same details.
+      If that fails too, the email or password is wrong.</li>
+  <li><b>Thermostat shows offline or stops updating:</b> check the thermostat shows as online in the
+      OJ Microline app. If the app can't reach it either, the thermostat has lost Wi-Fi.</li>
+  <li><b>Anything else:</b> set <b>Log Mode</b> to <code>Print</code>, run <b>Reconnect</b>, and
+      read the Lua output window.</li>
+</ul>
+
+<h2>About this build</h2>
+<p>This is the open-source Finite Labs Schluter DITRA-HEAT driver, v20260816
+(<code>github.com/finitelabs/control4-schluter</code>), configured for WarmlyYours. Schluter
+DITRA-HEAT and WarmlyYours thermostats run on the same OJ Microline cloud, so only the cloud
+address and brand ID differ.</p>
+<ul>
+  <li><b>Automatic updates are removed on purpose.</b> An update from the upstream project would
+      install the Schluter version and point the driver at Schluter's cloud.</li>
+  <li>To rebuild from a newer upstream release, run <code>tools/build_drivers.py</code> in the
+      WarmlyYours project folder.</li>
+</ul>
+<p class="small">Licensed under the GNU AGPL-3.0, as is the upstream project. Copyright 2026 Finite
+Labs, LLC; WarmlyYours changes are by the system owner.</p>
+
+</body>
+</html>

@@ -1,0 +1,8 @@
+# Build output - rebuild with: python tools/build_drivers.py
+dist/
+
+# Probe responses contain the account email and thermostat serial numbers
+tools/probe_output/
+
+__pycache__/
+*.pyc

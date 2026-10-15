@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WarmlyYours Thermostat (OJ Cloud)</title>
+<style>
+body { font-family: "Segoe UI", Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5;
+       color: #1f2328; background: #ffffff; max-width: 820px; margin: 0 auto; padding: 16px 24px; }
+h1 { color: #c8102e; font-size: 24px; border-bottom: 2px solid #c8102e; padding-bottom: 4px; }
+h2 { color: #c8102e; font-size: 18px; margin-top: 28px; border-bottom: 1px solid #d0d7de; padding-bottom: 2px; }
+h3 { font-size: 15px; margin: 18px 0 4px; }
+code { background: #f0f2f4; padding: 1px 4px; border-radius: 3px; font-size: 13px; }
+.note { background: #fff8e5; border-left: 4px solid #d4a72c; padding: 8px 12px; margin: 12px 0; }
+table { border-collapse: collapse; margin: 8px 0; }
+td, th { border: 1px solid #d0d7de; padding: 4px 10px; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+.small { font-size: 12px; color: #59636e; }
+</style>
+</head>
+<body>
+
+<h1>WarmlyYours Thermostat (OJ Cloud)</h1>
+
+<p>One WarmlyYours Wi-Fi floor-heating thermostat, shown in Control4 as a standard thermostat.
+This driver doesn't connect to the cloud itself. It binds to the <b>WarmlyYours (OJ Cloud)</b>
+account driver, which passes it the thermostat's live state and sends its changes back.</p>
+
+<div class="note">Not affiliated with or endorsed by WarmlyYours, OJ Electronics or Control4.</div>
+
+<h2>Setup</h2>
+<ol>
+  <li>Set up the <b>WarmlyYours (OJ Cloud)</b> account driver first and confirm it has signed in.</li>
+  <li>Add this driver to the thermostat's room.</li>
+  <li>On the Connections tab, bind its <b>WarmlyYours Thermostat</b> connection to the matching
+      thermostat on the account driver.</li>
+  <li><b>Serial ID</b> fills in and <b>Driver Status</b> shows <code>Online</code> once it has
+      received the thermostat.</li>
+</ol>
+
+<h2>What it shows and controls</h2>
+<ul>
+  <li><b>Temperature:</b> the floor temperature, which the thermostat reports about once a
+      minute.</li>
+  <li><b>Heat setpoint:</b> the target floor temperature, in 1&nbsp;°F or 0.5&nbsp;°C steps.</li>
+  <li><b>Heating:</b> whether the floor is heating right now.</li>
+  <li><b>Scale:</b> follows the project's °F/°C setting and can be changed in Navigator.</li>
+</ul>
+
+<h2>Modes and holds</h2>
+<table>
+  <tr><th>In Control4</th><th>What the thermostat does</th></tr>
+  <tr><td>Mode <b>Heat</b></td><td>Runs its own weekly schedule.</td></tr>
+  <tr><td>Mode <b>Off</b></td><td>Holds permanently at the thermostat's minimum (41&nbsp;°F /
+      5&nbsp;°C), which protects against frost. Set the mode back to Heat to resume the
+      schedule.</td></tr>
+  <tr><td>Hold <b>Off</b></td><td>Follows the schedule.</td></tr>
+  <tr><td>Hold <b>Until Next</b></td><td>Holds the current setpoint until the next schedule
+      event, then resumes the schedule. The app calls this Comfort mode.</td></tr>
+  <tr><td>Hold <b>Permanent</b></td><td>Holds the setpoint until changed. The app calls this
+      Manual mode.</td></tr>
+</table>
+<p>Changing the setpoint while following the schedule starts an <b>Until Next</b> hold, like
+changing it on the thermostat or in the app. During a <b>Permanent</b> hold it changes the held
+temperature instead.</p>
+
+<h2>Schedule</h2>
+<p>The thermostat's weekly schedule appears in the standard Control4 thermostat scheduling
+screen, with six events per day. Enabled events are the ones active on the thermostat.</p>
+<ul>
+  <li><b>Editing an event in Control4 changes the schedule on the thermostat itself</b>, and the
+      app shows the change.</li>
+  <li>Avoid editing the schedule in the app and in Control4 at the same time.</li>
+  <li>Some thermostats share one program across several days, for example all weekdays. Editing
+      any of those days changes all of them, as it does on the thermostat.</li>
+</ul>
+
+<h2>Properties</h2>
+<table>
+  <tr><th>Property</th><th>Description</th></tr>
+  <tr><td>Driver Status</td><td>Read-only. <code>Online</code>, <code>Offline</code> or
+      <code>Waiting for thermostat</code> (not yet bound or account not signed in).</td></tr>
+  <tr><td>Driver Version</td><td>Read-only. Upstream release this build is based on.</td></tr>
+  <tr><td>Serial ID</td><td>Read-only. Serial number of the bound thermostat.</td></tr>
+  <tr><td>Log Level</td><td>Detail of logging. Default <code>3 - Info</code>.</td></tr>
+  <tr><td>Log Mode</td><td><code>Off</code>, <code>Print</code> (Lua output window),
+      <code>Log</code> or both. Turns itself off after 3 hours.</td></tr>
+</table>
+
+<h2>Connections</h2>
+<table>
+  <tr><th>Connection</th><th>Use</th></tr>
+  <tr><td>Thermostat</td><td>The Control4 thermostat proxy. Program against it like any
+      thermostat.</td></tr>
+  <tr><td>WarmlyYours Thermostat</td><td>Bind to a thermostat on the account driver.</td></tr>
+  <tr><td>Temperature</td><td>Floor temperature for other drivers that take a temperature
+      value.</td></tr>
+</table>
+
+<h2>About this build</h2>
+<p>The open-source Finite Labs Schluter DITRA-HEAT thermostat driver, v20260816
+(<code>github.com/finitelabs/control4-schluter</code>), configured for WarmlyYours, which uses the
+same OJ Microline cloud. See the account driver's documentation for details.</p>
+<p class="small">Licensed under the GNU AGPL-3.0, as is the upstream project. Copyright 2026 Finite
+Labs, LLC; WarmlyYours changes are by the system owner.</p>
+
+</body>
+</html>
