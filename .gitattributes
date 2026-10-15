@@ -1,0 +1,5 @@
+# Check text out with LF on every OS, so a Windows checkout builds byte-identical
+# .c4z files to the released ones (core.autocrlf would otherwise convert them).
+* text=auto eol=lf
+*.c4z binary
+*.png binary
