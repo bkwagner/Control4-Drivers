@@ -1,0 +1,654 @@
+<devicedata>
+	<copyright>2026</copyright>
+	<manufacturer>Google</manufacturer>
+	<name>Google TV (Television)</name>
+	<model>Android TV Remote v2 - built-in Google TV</model>
+	<creator>C4 Google TV project</creator>
+	<created>08/09/2026 00:00</created>
+	<modified>08/09/2026 00:00</modified>
+	<version>1</version>
+	<control>lua_gen</control>
+	<driver>DriverWorks</driver>
+	<controlmethod>ip</controlmethod>
+	<small>devices_sm\tv.gif</small>
+	<large>devices_lg\tv.gif</large>
+	<minimum_os_version>3.4.1</minimum_os_version>
+	<config>
+		<script file="driver.lua"></script>
+		<properties>
+			<property>
+				<name>Device Type</name>
+				<type>LIST</type>
+				<items>
+					<item>Television</item>
+					<item>Streamer</item>
+				</items>
+				<default>Television</default>
+				<readonly>true</readonly>
+				<description>Which variant this driver is. Fixed: the proxy type is declared in driver.xml and cannot change at runtime. Use the Google TV (Streamer) driver for a dongle.</description>
+			</property>
+			<property>
+				<name>Device IP</name>
+				<default></default>
+				<type>STRING</type>
+				<readonly>false</readonly>
+				<description>IP address of the Google TV. Set a DHCP reservation for it - the driver has no discovery and will not follow a changed address.</description>
+			</property>
+			<property>
+				<name>Client Name</name>
+				<default>Control4</default>
+				<type>STRING</type>
+				<readonly>false</readonly>
+				<description>Name the TV displays for this controller while pairing. Only read during pairing.</description>
+			</property>
+			<property>
+				<name>Pairing Code</name>
+				<default></default>
+				<type>STRING</type>
+				<readonly>false</readonly>
+				<description>After running the Pair action, type the 6-character code shown on the TV here. The field clears itself once used.</description>
+			</property>
+			<property>
+				<name>Status</name>
+				<default>Not configured</default>
+				<type>STRING</type>
+				<readonly>true</readonly>
+				<description>What the driver is currently doing.</description>
+			</property>
+			<property>
+				<name>Paired Identity</name>
+				<default>none</default>
+				<type>STRING</type>
+				<readonly>true</readonly>
+				<description>Fingerprint of the stored client certificate. Survives reboots and driver updates. Use Unpair to discard it.</description>
+			</property>
+			<property>
+				<name>Current App</name>
+				<default>unknown</default>
+				<type>STRING</type>
+				<readonly>true</readonly>
+				<description>Package name reported by the device. Only updates when the device reports a change.</description>
+			</property>
+			<property>
+				<name>Power State</name>
+				<default>unknown</default>
+				<type>STRING</type>
+				<readonly>true</readonly>
+				<description>Whether the device reports itself as on.</description>
+			</property>
+			<property>
+				<name>Volume Level</name>
+				<default>unknown</default>
+				<type>STRING</type>
+				<readonly>true</readonly>
+				<description>Volume as the TV reports it. Unlike a streamer, a television has its own volume, so this should track.</description>
+			</property>
+			<property>
+				<name>Device MAC</name>
+				<default></default>
+				<type>STRING</type>
+				<readonly>false</readonly>
+				<description>Used for Wake-on-LAN. Learned automatically on the first successful connection. Wake-on-LAN only works for a WIRED device; on Wi-Fi, waking depends on Network Standby keeping the connection alive.</description>
+			</property>
+			<property>
+				<name>Reselect Room Source</name>
+				<type>LIST</type>
+				<items>
+					<item>Off</item>
+					<item>On</item>
+				</items>
+				<default>Off</default>
+				<readonly>false</readonly>
+				<description>Off by default on a television: a tv proxy is already in the room's audio path, so the minidriver can forward key presses to it and mini-apps keep the remote working without reselecting. Only turn this On if the remote goes dead inside an app.</description>
+			</property>
+			<property>
+				<name>Play Store Fallback</name>
+				<type>LIST</type>
+				<items>
+					<item>On</item>
+					<item>Off</item>
+				</items>
+				<default>On</default>
+				<readonly>false</readonly>
+				<description>Some apps cannot be launched directly; the device opens their Play Store page instead. With this On, the driver presses OK on that page, which launches the app. It presses repeatedly until the app opens, then stops. CAUTION: if the app is NOT installed the focused button is Install rather than Open, and this will begin an installation. Set to Off to never press.</description>
+			</property>
+			<property>
+				<name>Debug Mode</name>
+				<type>LIST</type>
+				<items>
+					<item>Off</item>
+					<item>Print</item>
+					<item>Print and Log</item>
+				</items>
+				<default>Print</default>
+				<readonly>false</readonly>
+				<description>Diagnostic output. Print goes to the Lua window in Composer.</description>
+			</property>
+		</properties>
+		<actions>
+			<action>
+				<name>Pair with Device</name>
+				<command>PAIR_START</command>
+			</action>
+			<action>
+				<name>Connect</name>
+				<command>CONNECT</command>
+			</action>
+			<action>
+				<name>Disconnect</name>
+				<command>DISCONNECT</command>
+			</action>
+			<action>
+				<name>Unpair (discard stored identity)</name>
+				<command>UNPAIR</command>
+			</action>
+			<action>
+				<name>Power On (wake)</name>
+				<command>POWER_ON</command>
+			</action>
+			<action>
+				<name>Power Off (sleep)</name>
+				<command>POWER_OFF</command>
+			</action>
+			<action>
+				<name>Send Wake-on-LAN</name>
+				<command>WAKE</command>
+			</action>
+			<action>
+				<name>Print Diagnostics</name>
+				<command>DIAGNOSTICS</command>
+			</action>
+		</actions>
+		<commands>
+			<command>
+				<name>Launch App</name>
+				<description>Launch an app by package name or deep link URL</description>
+				<params>
+					<param>
+						<name>App Link</name>
+						<type>STRING</type>
+						<default></default>
+					</param>
+				</params>
+			</command>
+			<command>
+				<name>Send Key</name>
+				<description>Send a raw Android key code by name, e.g. KEYCODE_SEARCH</description>
+				<params>
+					<param>
+						<name>Key Code</name>
+						<type>STRING</type>
+						<default>KEYCODE_HOME</default>
+					</param>
+				</params>
+			</command>
+			<command>
+				<name>Power On</name>
+				<description>Wake the television</description>
+			</command>
+			<command>
+				<name>Power Off</name>
+				<description>Put the television to sleep</description>
+			</command>
+		</commands>
+	</config>
+	<proxies>
+		<!--
+			A television is the display: the tv proxy makes it the room's video and
+			audio end point, gives it volume, and lets Control4 route other sources
+			through its inputs. A dongle uses media_player instead - see driver/atv.
+		-->
+		<proxy proxybindingid="5001" name="Google TV" primary="True">tv</proxy>
+	</proxies>
+	<events/>
+	<connections>
+		<!--
+			The proxy connection. Deliberately NOT hidden: a media_player's proxy
+			connection is marked hidden in the SDK samples, and copying that flag
+			here hid the television from Navigator entirely - it looked correct
+			in Composer, with a video end point and marked Visible, and simply did
+			not appear. The Roku TV and Sony drivers leave it visible.
+		-->
+		<connection>
+			<id>5001</id>
+			<connectionname>TV</connectionname>
+			<type>2</type>
+			<consumer>False</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>TV</classname>
+				</class>
+			</classes>
+		</connection>
+
+		<!--
+			Room binding. Without this a tv proxy never appears in a room: it is what
+			makes the television the room's video end point, audio end point and
+			volume control. Copied from the Sony Bravia driver in this project, which
+			declares exactly this and works.
+
+			Note audiosource and videosource are True here, unlike the hidden proxy
+			connection - this is the binding that tells Control4 the device can be a
+			room's source of both.
+		-->
+		<connection proxybindingid="5001">
+			<id>7000</id>
+			<facing>6</facing>
+			<connectionname>Room Selection - Output</connectionname>
+			<type>7</type>
+			<consumer>False</consumer>
+			<audiosource>True</audiosource>
+			<videosource>True</videosource>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>VIDEO_SELECTION</classname>
+				</class>
+				<class>
+					<classname>AUDIO_VOLUME</classname>
+				</class>
+				<class>
+					<classname>AUDIO_SELECTION</classname>
+				</class>
+			</classes>
+		</connection>
+
+		<!-- HDMI inputs. Bind whatever is plugged into the television here. -->
+		<connection proxybindingid="5001">
+			<id>1001</id>
+			<type>5</type>
+			<connectionname>HDMI 1</connectionname>
+			<consumer>True</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>HDMI</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>1002</id>
+			<type>5</type>
+			<connectionname>HDMI 2</connectionname>
+			<consumer>True</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>HDMI</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>1003</id>
+			<type>5</type>
+			<connectionname>HDMI 3</connectionname>
+			<consumer>True</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>HDMI</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>1004</id>
+			<type>5</type>
+			<connectionname>HDMI 4</connectionname>
+			<consumer>True</consumer>
+			<linelevel>True</linelevel>
+			<classes>
+				<class>
+					<classname>HDMI</classname>
+				</class>
+			</classes>
+		</connection>
+
+		<!--
+			Universal mini-app inputs, 3051-3075.
+
+			Deliberately NOT the 3101-3125 range the streamer uses: the SDK warns
+			that on TV and receiver proxies, inputs above x099 do not raise events,
+			variable changes or conditionals. The Sony Bravia in this project uses
+			3051-3065 for exactly this reason.
+		-->
+		<connection proxybindingid="5001">
+			<id>3051</id>
+			<type>5</type>
+			<connectionname>MiniApp 1</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3052</id>
+			<type>5</type>
+			<connectionname>MiniApp 2</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3053</id>
+			<type>5</type>
+			<connectionname>MiniApp 3</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3054</id>
+			<type>5</type>
+			<connectionname>MiniApp 4</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3055</id>
+			<type>5</type>
+			<connectionname>MiniApp 5</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3056</id>
+			<type>5</type>
+			<connectionname>MiniApp 6</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3057</id>
+			<type>5</type>
+			<connectionname>MiniApp 7</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3058</id>
+			<type>5</type>
+			<connectionname>MiniApp 8</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3059</id>
+			<type>5</type>
+			<connectionname>MiniApp 9</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3060</id>
+			<type>5</type>
+			<connectionname>MiniApp 10</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3061</id>
+			<type>5</type>
+			<connectionname>MiniApp 11</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3062</id>
+			<type>5</type>
+			<connectionname>MiniApp 12</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3063</id>
+			<type>5</type>
+			<connectionname>MiniApp 13</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3064</id>
+			<type>5</type>
+			<connectionname>MiniApp 14</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3065</id>
+			<type>5</type>
+			<connectionname>MiniApp 15</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3066</id>
+			<type>5</type>
+			<connectionname>MiniApp 16</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3067</id>
+			<type>5</type>
+			<connectionname>MiniApp 17</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3068</id>
+			<type>5</type>
+			<connectionname>MiniApp 18</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3069</id>
+			<type>5</type>
+			<connectionname>MiniApp 19</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3070</id>
+			<type>5</type>
+			<connectionname>MiniApp 20</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3071</id>
+			<type>5</type>
+			<connectionname>MiniApp 21</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3072</id>
+			<type>5</type>
+			<connectionname>MiniApp 22</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3073</id>
+			<type>5</type>
+			<connectionname>MiniApp 23</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3074</id>
+			<type>5</type>
+			<connectionname>MiniApp 24</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+		<connection proxybindingid="5001">
+			<id>3075</id>
+			<type>5</type>
+			<connectionname>MiniApp 25</connectionname>
+			<consumer>True</consumer>
+			<linelevel>False</linelevel>
+			<classes>
+				<class>
+					<classname>RF_MINI_APP</classname>
+				</class>
+			</classes>
+		</connection>
+	</connections>
+	<!--
+		A tv proxy advertises what the display can do through these. An empty
+		capabilities block advertises nothing, and Navigator will not build a Watch
+		experience around a display that claims no inputs and no audio - which is
+		why this driver appeared correctly in Composer but never in Navigator.
+
+		Modelled on the Sony Bravia driver in this project, adjusted to what this
+		driver actually supports: volume is up/down and mute-toggle via key codes,
+		not discrete levels, and there are four HDMI inputs.
+	-->
+	<capabilities>
+		<has_audio>True</has_audio>
+		<audio_consumer_count>0</audio_consumer_count>
+		<audio_provider_count>1</audio_provider_count>
+		<video_consumer_count>4</video_consumer_count>
+		<video_provider_count>0</video_provider_count>
+
+		<has_discrete_input_select>True</has_discrete_input_select>
+		<has_toad_input_select>False</has_toad_input_select>
+		<requires_channel_after_input>False</requires_channel_after_input>
+
+		<has_up_down_volume_control>True</has_up_down_volume_control>
+		<has_discrete_volume_control>False</has_discrete_volume_control>
+		<has_toggle_mute_control>True</has_toggle_mute_control>
+		<has_discrete_mute_control>False</has_discrete_mute_control>
+
+		<has_channel_up_down>True</has_channel_up_down>
+		<has_discrete_channel_select>True</has_discrete_channel_select>
+
+		<has_discrete_balance_control>False</has_discrete_balance_control>
+		<has_discrete_bass_control>False</has_discrete_bass_control>
+		<has_discrete_treble_control>False</has_discrete_treble_control>
+		<has_discrete_loudness_control>False</has_discrete_loudness_control>
+		<has_toggle_loudness_control>False</has_toggle_loudness_control>
+		<has_up_down_balance_control>False</has_up_down_balance_control>
+		<has_up_down_bass_control>False</has_up_down_bass_control>
+		<has_up_down_treble_control>False</has_up_down_treble_control>
+	</capabilities>
+</devicedata>

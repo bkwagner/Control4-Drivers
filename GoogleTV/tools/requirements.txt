@@ -1,0 +1,5 @@
+# Desktop tooling only - none of this runs on the Control4 controller.
+# androidtvremote2 implements the Android TV Remote v2 pairing handshake, which we
+# use rather than reimplementing the secret hash. Apache-2.0; also backs the Home
+# Assistant integration, so it is well exercised against real devices.
+androidtvremote2>=0.1.1

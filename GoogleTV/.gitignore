@@ -1,0 +1,12 @@
+# Build output
+dist/
+*.c4z
+
+# Pairing artifacts - the client cert IS the device identity. Never commit it.
+*.pem
+*.key
+certs/
+
+__pycache__/
+*.pyc
+.venv/
