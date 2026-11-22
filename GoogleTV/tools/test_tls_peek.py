@@ -21,7 +21,8 @@ import sys
 from pathlib import Path
 
 try:
-    import lupa
+    # The controller runs LuaJIT 2.1 (Lua 5.1); plain `import lupa` is Lua 5.5.
+    import lupa.luajit21 as lupa
 except ImportError:
     sys.exit("error: pip install lupa")
 

@@ -20,8 +20,18 @@ the same API, so these drivers are the open-source
 | `tools/wg4_probe.py` | Read-only desktop probe of the cloud: list, `--poll`, `--watch` |
 | `dist/warmlyyours_oj.c4z` | Account driver: sign-in, discovery, notification long-poll |
 | `dist/warmlyyours_oj_thermostat.c4z` | One per thermostat: `thermostatV2` proxy |
+| `tests/` | Off-controller tests of the built `.c4z` files against a scripted mythermostat.info |
 
-Build: `python tools/build_drivers.py`
+Build, then test (from the repository root):
+
+```bash
+python WarmlyYours/tools/build_drivers.py
+python testing/run_tests.py WarmlyYours
+```
+
+The tests check every patch and the full login, discovery, notification, write
+and 401-recovery flow, plus the 1/100 °C conversions both ways. Run against the
+unpatched Schluter release, they fail on each patch.
 
 ## What the patches change
 

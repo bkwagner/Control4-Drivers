@@ -1,0 +1,93 @@
+-- Tests for testing/lua/c4_shim_ext.lua, and that the runtime is the controller's kind.
+local T = require("testlib")
+
+T.section("the runtime is LuaJIT in Lua 5.1 mode, as on a controller")
+T.truthy("LuaJIT", jit and jit.version)
+T.eq("_VERSION", _VERSION, "Lua 5.1")
+T.eq("no table.unpack (5.2+)", table.unpack, nil)
+T.eq("no table.pack (5.2+)", table.pack, nil)
+T.truthy("unpack is global", type(unpack) == "function")
+T.truthy("bit library", type(require("bit").band) == "function")
+T.eq("no // operator", loadstring("return 7 // 2"), nil)
+T.eq("no & operator", loadstring("return 7 & 2"), nil)
+
+T.section("call recording")
+ShimResetCalls()
+C4:UpdateProperty("Driver Status", "Online")
+T.eq("UpdateProperty writes Properties", Properties["Driver Status"], "Online")
+T.eq("and is recorded", ShimPropertyHistory("Driver Status"), { "Online" })
+C4:SendToProxy(5001, "TEMPERATURE_CHANGED", { TEMPERATURE = "21.5" }, "NOTIFY")
+C4:SendToProxy(5002, "OTHER", {})
+T.eq("SendToProxy filtered by binding", #ShimProxySends(5001), 1)
+T.eq("last send params", ShimLastProxySend(nil, "TEMPERATURE_CHANGED").params.TEMPERATURE, "21.5")
+T.raises("the shim's argument checks still run", function()
+  C4:SendToProxy(5001, "X")
+end, "Not Enough Parameters")
+
+T.section("C4:url(): a request waits until the test answers it")
+ShimHttpReset()
+local done = {}
+local t = C4:url()
+T.truthy("methods chain", t:SetOptions({ timeout = 5 }) == t)
+t:OnDone(function(transfer, responses, errCode, errMsg)
+  done = { transfer = transfer, responses = responses, errCode = errCode, errMsg = errMsg }
+end)
+t:Post("https://example.test/api/login?x=1&name=a%20b", '{"a":1}', { ["Content-Type"] = "application/json" })
+T.eq("pending", #ShimHttpPending(), 1)
+T.eq("not done yet", done.errCode, nil)
+local req = ShimHttpRespond("POST", "/api/login", { code = 200, body = { SessionId = "abc" } })
+T.eq("request body recorded", req.body, '{"a":1}')
+T.eq("options recorded", req.options.timeout, 5)
+T.eq("query parsed", ShimQuery(req.url), { x = "1", name = "a b" })
+T.eq("errCode 0", done.errCode, 0)
+T.eq("code", done.responses[1].code, 200)
+T.eq("table body JSON-encoded", ShimJSON.decode(done.responses[1].body), { SessionId = "abc" })
+T.eq("no longer pending", #ShimHttpPending(), 0)
+T.raises("a used transfer cannot start again", function()
+  t:Get("https://example.test/")
+end, "re-used")
+
+T.section("C4:url(): transfer error, cancel, and no match")
+local e = {}
+C4:url()
+  :OnDone(function(_, r, code, msg)
+    e = { n = #r, code = code, msg = msg }
+  end)
+  :Get("https://example.test/slow")
+ShimHttpRespond("GET", "/slow", { error = "Timeout was reached", errCode = 28 })
+T.eq("error delivered", e, { n = 0, code = 28, msg = "Timeout was reached" })
+local c = {}
+local poll = C4:url()
+  :OnDone(function(_, _, code)
+    c.code = code
+  end)
+  :Get("https://example.test/poll")
+poll:Cancel()
+T.eq("cancel gives -1", c.code, -1)
+T.raises("answering with nothing pending names what is pending", function()
+  ShimHttpRespond("GET", "/nothing", {})
+end, "no pending GET request")
+
+T.section("routes answer chains of requests")
+ShimHttpReset()
+ShimHttpRoute("GET", "/first", { body = "1" })
+ShimHttpRoute("GET", "/second", function(r)
+  return { body = "2:" .. r.url }
+end)
+local got = {}
+C4:url()
+  :OnDone(function(_, r)
+    got[#got + 1] = r[1].body
+    C4:url()
+      :OnDone(function(_, r2)
+        got[#got + 1] = r2[1].body
+      end)
+      :Get("https://example.test/second")
+  end)
+  :Get("https://example.test/first")
+C4:url():Get("https://example.test/unrouted")
+T.eq("both served", ShimHttpServe(), 2)
+T.eq("in order", got, { "1", "2:https://example.test/second" })
+T.eq("unrouted stays pending", #ShimHttpPending(), 1)
+
+T.finish()
